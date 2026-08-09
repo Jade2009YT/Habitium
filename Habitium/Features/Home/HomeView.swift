@@ -11,6 +11,7 @@ import SwiftUI
 struct HomeView: View {
     @Environment(AppDependencyContainer.self) private var container
     @State private var viewModel: HomeViewModel?
+    @State private var showingSettings = false
     @Binding var selectedTab: AppTab
 
     var body: some View {
@@ -26,6 +27,18 @@ struct HomeView: View {
                 }
             }
             .navigationTitle("Habitium")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showingSettings = true
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                    }
+                }
+            }
+            .sheet(isPresented: $showingSettings, onDismiss: { viewModel?.refresh() }) {
+                SettingsView()
+            }
             .onAppear {
                 if viewModel == nil {
                     viewModel = HomeViewModel(container: container)

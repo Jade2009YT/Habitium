@@ -19,6 +19,7 @@ struct AddMealView: View {
 
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var selectedImageData: Data?
+    @State private var showingCamera = false
 
     @State private var descriptionText = ""
 
@@ -80,25 +81,41 @@ struct AddMealView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
             }
+            .fullScreenCover(isPresented: $showingCamera) {
+                CameraCaptureView { data in
+                    selectedImageData = data
+                }
+                .ignoresSafeArea()
+            }
         }
     }
 
     private var photoSection: some View {
         Section {
-            PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                if let selectedImageData, let uiImage = UIImage(data: selectedImageData) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxHeight: 220)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                } else {
-                    Label("Elegir foto de la comida", systemImage: "camera.fill")
-                }
+            if let selectedImageData, let uiImage = UIImage(data: selectedImageData) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 220)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
             }
-            .onChange(of: selectedPhoto) { _, newValue in
-                Task {
-                    selectedImageData = try? await newValue?.loadTransferable(type: Data.self)
+
+            HStack {
+                if CameraCaptureView.isCameraAvailable {
+                    Button {
+                        showingCamera = true
+                    } label: {
+                        Label("Cámara", systemImage: "camera.fill")
+                    }
+                }
+
+                PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                    Label("Galería", systemImage: "photo.on.rectangle")
+                }
+                .onChange(of: selectedPhoto) { _, newValue in
+                    Task {
+                        selectedImageData = try? await newValue?.loadTransferable(type: Data.self)
+                    }
                 }
             }
 

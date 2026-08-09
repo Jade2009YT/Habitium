@@ -1,0 +1,42 @@
+{
+  "identifier" : "8F3A9C10",
+  "nonRenewingSubscriptions" : [],
+  "products" : [],
+  "settings" : {
+    "_locale" : "es_ES"
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21471258",
+      "localizations" : [],
+      "name" : "Habitium Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "5.00",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6446AA32",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Desbloquea todas las funciones de Habitium sin límites.",
+              "displayName" : "Habitium Pro Mensual",
+              "locale" : "es_ES"
+            }
+          ],
+          "productID" : "com.habitium.app.pro.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Habitium Pro Monthly",
+          "subscriptionGroupID" : "21471258",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 2,
+    "minor" : 0
+  }
+}

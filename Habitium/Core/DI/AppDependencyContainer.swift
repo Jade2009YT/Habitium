@@ -18,6 +18,10 @@ final class AppDependencyContainer {
     let nutritionRepository: NutritionRepository
     let plannerRepository: PlannerRepository
     let financeRepository: FinanceRepository
+    /// StoreKit scaffold for a possible future "Habitium Pro" subscription.
+    /// Nothing in the app currently checks `isProActive` — everything is
+    /// unlocked for personal use.
+    let subscriptionManager = SubscriptionManager()
 
     private let modelContext: ModelContext
 
@@ -56,5 +60,13 @@ final class AppDependencyContainer {
         modelContext.insert(settings)
         try? modelContext.save()
         return settings
+    }
+
+    func updateUserSettings(aiProvider: AIProviderKind, mealReminders: Bool, eventNotifications: Bool) {
+        let settings = currentUserSettings()
+        settings.preferredAIProvider = aiProvider.rawValue
+        settings.mealReminderNotificationsEnabled = mealReminders
+        settings.eventNotificationsEnabled = eventNotifications
+        try? modelContext.save()
     }
 }

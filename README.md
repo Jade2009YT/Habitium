@@ -57,6 +57,59 @@ En Xcode:
    "Fix Issue" si falta).
 3. Build & run sobre un iPhone (físico o simulador) con iOS 17+.
 
+## Instalarla en tu iPhone para uso personal (gratis, sin App Store)
+
+No hace falta pagar los 99 $/año del Apple Developer Program para tener
+Habitium en tu propio teléfono — con tu Apple ID normal basta:
+
+1. Conecta tu iPhone al Mac por cable (o usa Wi-Fi debugging) y ábrelo en
+   Xcode: `Window → Devices and Simulators` para confirmarlo.
+2. En el proyecto, ve a **Signing & Capabilities** (targets `Habitium` y
+   `HabitiumWidgetsExtension`) y en **Team** elige "Add an Account…" con tu
+   Apple ID si no aparece. Xcode generará un certificado de desarrollo
+   gratuito automáticamente.
+3. Selecciona tu iPhone como destino (arriba, junto al botón ▶️) y dale a
+   **Run**.
+4. La primera vez, iOS bloqueará la app como "de desarrollador no
+   confiable". Ve a **Ajustes → General → VPN y gestión de dispositivos**
+   en el iPhone y confía en tu Apple ID.
+5. **Límite real**: con cuenta gratuita, la app deja de abrir a los 7 días y
+   hay que volver a darle a Run desde Xcode para "renovarla". Si algún día
+   quieres que dure indefinidamente (o distribuirla vía TestFlight/App
+   Store), necesitas la cuenta de pago.
+
+## ¿Y Google Play?
+
+Sé honesto contigo: **este proyecto es Swift/SwiftUI, que solo corre en
+iOS/iPadOS/macOS — no se puede publicar en Google Play tal cual.** Android
+exige una app nativa en Kotlin/Java, o reescribirla con un framework
+multiplataforma (Flutter, React Native, Kotlin Multiplatform). Eso sería un
+proyecto aparte, no una opción de configuración aquí.
+
+Si el objetivo es monetizar, lo que sí encaja de forma natural con este
+código es una **suscripción en la App Store vía StoreKit 2** (ver siguiente
+sección) — mismo proyecto, sin reescrituras. Android quedaría como una
+decisión futura independiente, el día que de verdad quieras invertir en
+ello.
+
+## Suscripción "Habitium Pro" (StoreKit 2) — preparada pero apagada
+
+Hay una base de suscripción mensual (5,00 €) ya montada en
+`Core/Monetization/SubscriptionManager.swift`, pensada para si algún día
+publicas la app:
+
+- **Ahora mismo no bloquea nada.** Toda la app está desbloqueada para ti,
+  uses o no la suscripción — es solo scaffolding.
+- Para probarla localmente sin gastar nada ni tocar App Store Connect: abre
+  el scheme `Habitium` en Xcode → **Edit Scheme → Run → Options → StoreKit
+  Configuration** → selecciona `Configuration/Habitium.storekit`. Así puedes
+  simular compras y renovaciones en el Simulator.
+- El estado de la suscripción se ve en **Ajustes → Habitium Pro** dentro de
+  la app (accesible desde el ⚙️ en la pantalla de inicio).
+- Si algún día publicas de verdad, crea el producto
+  `com.habitium.app.pro.monthly` en App Store Connect con el mismo
+  identificador y ya funciona contra el sistema real.
+
 ## Gestión de secretos
 
 Las API keys **nunca** se hardcodean. `Configuration/Secrets.xcconfig` está
@@ -75,7 +128,8 @@ Habitium/
 │   ├── Secrets.example.xcconfig    # plantilla (versionada)
 │   ├── Secrets.xcconfig            # tus claves reales (gitignored)
 │   ├── Debug.xcconfig
-│   └── Release.xcconfig
+│   ├── Release.xcconfig
+│   └── Habitium.storekit           # Config. local de StoreKit para probar la suscripción
 ├── Shared/                         # Compilado en AMBOS targets (app + widgets)
 │   ├── AppGroup.swift               # ID del App Group
 │   ├── WidgetKind.swift             # Identificadores de cada widget
@@ -90,6 +144,8 @@ Habitium/
 │   │   ├── Persistence/             # SwiftData ModelContainer
 │   │   ├── Networking/              # Clientes de OpenAI / Claude
 │   │   ├── Notifications/           # Recordatorios locales
+│   │   ├── Camera/                  # Captura de foto con cámara (UIImagePickerController)
+│   │   ├── Monetization/            # StoreKit 2 — suscripción "Habitium Pro"
 │   │   ├── DeepLink/                # Enruta acciones desde los widgets
 │   │   ├── Sync/                    # Aplica acciones pendientes de los widgets
 │   │   ├── Widgets/                 # WidgetCenter.reloadTimelines wrapper
@@ -99,9 +155,10 @@ Habitium/
 │   ├── UseCases/                    # Lógica de negocio (capa de dominio)
 │   ├── Features/                    # Un folder por pestaña (MVVM)
 │   │   ├── Home/                     # Dashboard unificado
-│   │   ├── Nutrition/                # FoodTrackerView + IA
+│   │   ├── Nutrition/                # FoodTrackerView + IA (cámara/galería/texto)
 │   │   ├── Planner/                  # Calendario, tareas, notas
-│   │   └── Finance/                  # Ingresos/gastos, presupuesto
+│   │   ├── Finance/                  # Ingresos/gastos, presupuesto
+│   │   └── Settings/                 # Metas, proveedor de IA, notificaciones, moneda
 │   └── Resources/Assets.xcassets
 ├── HabitiumWidgets/                # Extensión de WidgetKit
 │   ├── HabitiumWidgetsBundle.swift  # @main WidgetBundle
