@@ -1,0 +1,35 @@
+# Xcode
+build/
+DerivedData/
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+*.xcworkspace/xcuserdata/
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# XcodeGen generates the .xcodeproj from project.yml — don't commit the generated project
+*.xcodeproj/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# CocoaPods (not used, kept for safety)
+Pods/
+
+# Secrets — NEVER commit real API keys.
+# Copy Configuration/Secrets.example.xcconfig to Configuration/Secrets.xcconfig
+# and fill in real values. Secrets.xcconfig is gitignored on purpose.
+Configuration/Secrets.xcconfig
+.env
+.env.local
+
+# macOS
+.DS_Store
+
+# Fastlane / CI artifacts
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output

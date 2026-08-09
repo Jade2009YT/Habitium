@@ -1,0 +1,13 @@
+//
+//  Release.xcconfig
+//  Habitium — Release configuration
+//
+#include? "Secrets.xcconfig"
+
+OPENAI_API_KEY =
+ANTHROPIC_API_KEY =
+APP_GROUP_ID = group.com.habitium.app
+
+PRODUCT_BUNDLE_IDENTIFIER = com.habitium.app
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited)
+ONLY_ACTIVE_ARCH = NO

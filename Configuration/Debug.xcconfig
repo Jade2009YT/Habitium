@@ -1,0 +1,19 @@
+//
+//  Debug.xcconfig
+//  Habitium — Debug configuration
+//
+//  Pulls in the gitignored Secrets.xcconfig (create it from
+//  Secrets.example.xcconfig before building) and exposes its values to
+//  Info.plist via build-setting placeholders.
+//
+#include? "Secrets.xcconfig"
+
+// Fallbacks so the project still builds (with empty keys) if Secrets.xcconfig
+// hasn't been created yet.
+OPENAI_API_KEY =
+ANTHROPIC_API_KEY =
+APP_GROUP_ID = group.com.habitium.app
+
+PRODUCT_BUNDLE_IDENTIFIER = com.habitium.app
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) DEBUG
+ONLY_ACTIVE_ARCH = YES
