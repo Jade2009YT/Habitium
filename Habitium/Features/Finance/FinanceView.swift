@@ -14,6 +14,7 @@ struct FinanceView: View {
     @State private var viewModel: FinanceViewModel?
     @State private var showingAddTransaction = false
     @State private var showingEditBudget = false
+    @State private var showingCategoryBudgets = false
 
     var body: some View {
         NavigationStack {
@@ -25,6 +26,38 @@ struct FinanceView: View {
                                 .listRowInsets(EdgeInsets())
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
+
+                            if let goalAmount = viewModel.savingsGoalAmount {
+                                SavingsGoalCard(
+                                    currentSavings: viewModel.overview.totalSavings,
+                                    goalAmount: goalAmount,
+                                    goalDate: viewModel.savingsGoalDate,
+                                    currencyCode: viewModel.overview.currencyCode
+                                )
+                                .listRowInsets(EdgeInsets())
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                            }
+                        }
+
+                        Section {
+                            CategoryDonutChart(rows: viewModel.categoryBreakdown, currencyCode: viewModel.overview.currencyCode)
+                        } header: {
+                            HStack {
+                                Text("Gastos por categoría")
+                                Spacer()
+                                Button("Editar límites") { showingCategoryBudgets = true }
+                                    .font(.caption)
+                            }
+                            .textCase(nil)
+                        }
+
+                        if viewModel.categoryBreakdown.contains(where: { $0.limit != nil }) {
+                            Section("Presupuesto por categoría") {
+                                ForEach(viewModel.categoryBreakdown.filter { $0.limit != nil }) { row in
+                                    categoryBudgetRow(row)
+                                }
+                            }
                         }
 
                         Section("Movimientos de este mes") {
@@ -71,6 +104,9 @@ struct FinanceView: View {
             .sheet(isPresented: $showingEditBudget, onDismiss: { viewModel?.refresh() }) {
                 if let viewModel { EditBudgetSheet(viewModel: viewModel) }
             }
+            .sheet(isPresented: $showingCategoryBudgets, onDismiss: { viewModel?.refresh() }) {
+                if let viewModel { CategoryBudgetsSheet(viewModel: viewModel) }
+            }
             .onAppear {
                 if viewModel == nil {
                     viewModel = FinanceViewModel(container: container)
@@ -84,6 +120,25 @@ struct FinanceView: View {
                 deepLinkCoordinator.consume()
             }
         }
+    }
+
+    private func categoryBudgetRow(_ row: CategorySpendingRow) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Label(row.category.displayName, systemImage: row.category.symbolName)
+                    .font(.caption.bold())
+                Spacer()
+                if let limit = row.limit {
+                    Text("\(row.spent.formatted(.currency(code: viewModel?.overview.currencyCode ?? "USD"))) / \(limit.formatted(.currency(code: viewModel?.overview.currencyCode ?? "USD")))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if let progress = row.progress {
+                ProgressView(value: progress).tint(row.isOverLimit ? Theme.Colors.danger : Theme.Colors.finance)
+            }
+        }
+        .padding(.vertical, 2)
     }
 
     private func transactionRow(_ transaction: Transaction) -> some View {

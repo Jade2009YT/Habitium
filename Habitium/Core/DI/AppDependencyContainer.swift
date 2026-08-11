@@ -52,6 +52,10 @@ final class AppDependencyContainer {
         FetchUpcomingEventsUseCase(repository: plannerRepository)
     }
 
+    func makeCalculateLoggingStreakUseCase() -> CalculateLoggingStreakUseCase {
+        CalculateLoggingStreakUseCase(repository: nutritionRepository)
+    }
+
     func currentUserSettings() -> UserSettings {
         if let existing = try? modelContext.fetch(FetchDescriptor<UserSettings>()).first {
             return existing

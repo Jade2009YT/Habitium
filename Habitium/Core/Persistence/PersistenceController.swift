@@ -26,11 +26,13 @@ final class PersistenceController {
         let schema = Schema([
             FoodEntry.self,
             NutritionGoal.self,
+            WeightEntry.self,
             PlannerTask.self,
             PlannerEvent.self,
             PlannerNote.self,
             Transaction.self,
             BudgetSettings.self,
+            CategoryBudget.self,
             UserSettings.self
         ])
 
@@ -71,11 +73,13 @@ final class PersistenceController {
         let schema = Schema([
             FoodEntry.self,
             NutritionGoal.self,
+            WeightEntry.self,
             PlannerTask.self,
             PlannerEvent.self,
             PlannerNote.self,
             Transaction.self,
             BudgetSettings.self,
+            CategoryBudget.self,
             UserSettings.self
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory)

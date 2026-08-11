@@ -54,6 +54,12 @@ private final class FakeNutritionRepository: NutritionRepository {
     func updateGoal(dailyCalories: Double, proteinGrams: Double, carbsGrams: Double, fatGrams: Double) {
         goal.dailyCalorieGoal = dailyCalories
     }
+    func recentUniqueEntries(limit: Int) -> [FoodEntry] { Array(entriesToday.prefix(limit)) }
+    func loggedDates() -> Set<Date> { Set(entriesToday.map { Calendar.current.startOfDay(for: $0.date) }) }
+
+    var storedWeights: [WeightEntry] = []
+    func addWeightEntry(_ entry: WeightEntry) { storedWeights.append(entry) }
+    func weightEntries(limit: Int) -> [WeightEntry] { Array(storedWeights.prefix(limit)) }
 }
 
 @MainActor
@@ -72,4 +78,16 @@ private final class FakeFinanceRepository: FinanceRepository {
     }
     func monthlySpent() -> Double { spent }
     func availableToSpend() -> Double { max(0, budget.monthlyBudget - spent) }
+    func updateSavingsGoal(amount: Double?, date: Date?) {
+        budget.savingsGoalAmount = amount
+        budget.savingsGoalDate = date
+    }
+    func spentByCategory(in monthOf: Date) -> [TransactionCategory: Double] { [:] }
+
+    var budgets: [TransactionCategory: Double] = [:]
+    func categoryBudgets() -> [CategoryBudget] {
+        budgets.map { CategoryBudget(category: $0.key, monthlyLimit: $0.value) }
+    }
+    func setCategoryBudget(_ category: TransactionCategory, monthlyLimit: Double) { budgets[category] = monthlyLimit }
+    func removeCategoryBudget(_ category: TransactionCategory) { budgets.removeValue(forKey: category) }
 }

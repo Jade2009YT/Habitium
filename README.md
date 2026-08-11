@@ -204,7 +204,37 @@ Interactividad (App Intents en `Shared/Intents/`):
   finalización real, que `PendingActionProcessor` aplica a SwiftData la
   próxima vez que la app pasa a primer plano.
 
-## Próximos pasos sugeridos
+## Lo mejor de las apps mejor valoradas, adaptado a Habitium
+
+Antes de esta ronda, investigué qué hace tan queridas a la app de nutrición,
+la de finanzas (que no fuera un banco) y la de calendario mejor valoradas de
+la App Store, y adapté lo más valioso de cada una:
+
+| Inspirado en | Qué hace bien | Dónde está en Habitium |
+|---|---|---|
+| **PlateLens** (4.8★) / **Lose It!** | Tendencia de peso + repetir comida en un toque | `WeightTrendCard`, `FoodTrackerViewModel.repeatEntry` |
+| **Fooducate** / **Lose It!** | Racha de días registrando, como refuerzo motivacional | `CalculateLoggingStreakUseCase` |
+| **Monarch Money** (4.8★) / **Goodbudget** | Presupuesto por categoría (sobres) + desglose visual | `CategoryBudget`, `CategoryDonutChart`, `CategoryBudgetsSheet` |
+| **EveryDollar** | Meta de ahorro con monto y fecha objetivo | `BudgetSettings.savingsGoal*`, `SavingsGoalCard` |
+| **Fantastical** (4.6★, Apple Design Award) | Crear eventos escribiendo en lenguaje natural | `NaturalLanguageQuickAdd`, `QuickAddBar` |
+| **Structured** | Vista de línea de tiempo por horas, no solo una lista | `DayTimelineView` |
+
+### Backlog (no implementado todavía, a propósito)
+
+Para no meter media docena de features a medias, dejé fuera de esta ronda:
+
+- **Escáner de código de barras** (MyFitnessPal/Fooducate) — rápido para
+  alimentos envasados; Habitium ya cubre ese caso con foto + IA, así que es
+  redundante hasta que se note que hace falta.
+- **Transacciones recurrentes** (Monarch/EveryDollar) — alta automática de
+  gastos fijos (alquiler, suscripciones) cada mes.
+- **"Enfoque del día" / Top 3** (Sunsama) — elegir 1-3 prioridades del día en
+  vez de solo listar tareas.
+- **Recalibración automática del objetivo de calorías** según la tendencia
+  real de peso (lo que hace único a PlateLens) — por ahora el objetivo es
+  el que pones tú a mano en Ajustes.
+
+## Otros próximos pasos sugeridos
 
 - Sustituir los placeholders de `AppIcon`/`AccentColor` por assets reales.
 - Añadir Live Activities para el registro de comidas en curso.

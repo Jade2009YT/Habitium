@@ -18,6 +18,9 @@ struct PlannerView: View {
                 if let viewModel {
                     ScrollView {
                         VStack(spacing: Theme.Layout.sectionSpacing) {
+                            QuickAddBar { text in
+                                viewModel.addQuickEvent(from: text)
+                            }
                             MonthCalendarView(
                                 visibleMonth: Bindable(viewModel).visibleMonth,
                                 selectedDate: Bindable(viewModel).selectedDate,

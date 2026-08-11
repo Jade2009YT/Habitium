@@ -17,6 +17,16 @@ final class FoodTrackerViewModel {
     private(set) var progress: NutritionDailyProgress = .init(
         consumedCalories: 0, goalCalories: 2000, consumedMacros: .zero, goalMacros: .zero
     )
+    /// Consecutive days with at least one logged meal — shown as a small
+    /// streak badge, borrowed from Lose It!/Fooducate.
+    private(set) var loggingStreak: Int = 0
+    /// Most recent distinct meals, for one-tap "repetir comida" (à la Lose
+    /// It!'s favorites/recents).
+    private(set) var recentEntries: [FoodEntry] = []
+    /// Last 30 weight measurements, newest first — feeds the trend mini
+    /// chart (PlateLens/Lose It!-style).
+    private(set) var weightEntries: [WeightEntry] = []
+
     var isAnalyzing = false
     var errorMessage: String?
 
@@ -30,6 +40,31 @@ final class FoodTrackerViewModel {
     func refresh() {
         todayEntries = container.nutritionRepository.entries(on: .now)
         progress = container.makeCalculateRemainingCaloriesUseCase().execute()
+        loggingStreak = container.makeCalculateLoggingStreakUseCase().execute()
+        recentEntries = container.nutritionRepository.recentUniqueEntries(limit: 6)
+        weightEntries = container.nutritionRepository.weightEntries(limit: 30)
+    }
+
+    /// Re-logs a past entry as a new one today, same macros and meal type —
+    /// the one-tap "repetir comida" flow.
+    func repeatEntry(_ entry: FoodEntry) {
+        let copy = FoodEntry(
+            name: entry.name,
+            mealType: MealType(rawValue: entry.mealType) ?? .snack,
+            source: .manual,
+            calories: entry.calories,
+            proteinGrams: entry.proteinGrams,
+            carbsGrams: entry.carbsGrams,
+            fatGrams: entry.fatGrams,
+            notes: "Repetido de \(entry.date.formatted(date: .abbreviated, time: .omitted))"
+        )
+        container.nutritionRepository.addEntry(copy)
+        refresh()
+    }
+
+    func logWeight(kg: Double) {
+        container.nutritionRepository.addWeightEntry(WeightEntry(weightKg: kg))
+        refresh()
     }
 
     func analyzePhoto(_ imageData: Data, mealType: MealType, context: String? = nil) async {

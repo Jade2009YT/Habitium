@@ -81,6 +81,13 @@ final class PlannerViewModel {
         refreshAll()
     }
 
+    /// Fantastical-style natural-language quick add: "Gimnasio mañana
+    /// 18:00" becomes an event titled "Gimnasio" starting tomorrow at 6pm.
+    func addQuickEvent(from text: String) {
+        let parsed = NaturalLanguageQuickAdd.parse(text, defaultDate: selectedDate)
+        addEvent(title: parsed.title, startDate: parsed.date, endDate: parsed.date.addingTimeInterval(3600), location: nil, reminder: true)
+    }
+
     func addEvent(title: String, startDate: Date, endDate: Date, location: String?, reminder: Bool) {
         var identifier: String?
         if reminder {

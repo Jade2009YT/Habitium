@@ -31,11 +31,17 @@ struct DayDetailView: View {
                 Text("No hay eventos ni tareas para este día.")
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(viewModel.eventsForDay) { event in
-                    eventRow(event)
+                if !viewModel.eventsForDay.isEmpty {
+                    DayTimelineView(events: viewModel.eventsForDay) { event in
+                        viewModel.deleteEvent(event)
+                    }
                 }
-                ForEach(viewModel.tasksForDay) { task in
-                    taskRow(task)
+                if !viewModel.tasksForDay.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(viewModel.tasksForDay) { task in
+                            taskRow(task)
+                        }
+                    }
                 }
             }
 
@@ -47,24 +53,6 @@ struct DayDetailView: View {
         }
         .sheet(isPresented: $showingAddEvent) {
             AddEventSheet(viewModel: viewModel)
-        }
-    }
-
-    private func eventRow(_ event: PlannerEvent) -> some View {
-        HStack {
-            Image(systemName: "calendar.circle.fill").foregroundStyle(Theme.Colors.planner)
-            VStack(alignment: .leading) {
-                Text(event.title).font(.subheadline.bold())
-                Text(event.startDate.formatted(date: .omitted, time: .shortened))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Button(role: .destructive) {
-                viewModel.deleteEvent(event)
-            } label: {
-                Image(systemName: "trash").foregroundStyle(.secondary)
-            }
         }
     }
 

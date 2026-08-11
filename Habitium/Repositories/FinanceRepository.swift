@@ -18,12 +18,22 @@ protocol FinanceRepository {
 
     func currentBudget() -> BudgetSettings
     func updateBudget(monthlyBudget: Double, totalSavings: Double, currencyCode: String)
+    func updateSavingsGoal(amount: Double?, date: Date?)
 
     /// Sum of expenses this month (positive number).
     func monthlySpent() -> Double
     /// monthlyBudget - monthlySpent (never below 0 for display purposes,
     /// callers can still detect an overspend from monthlySpent()).
     func availableToSpend() -> Double
+
+    /// Spent-per-category this month (expenses only) — feeds the category
+    /// breakdown donut chart and per-category budget bars.
+    func spentByCategory(in monthOf: Date) -> [TransactionCategory: Double]
+
+    // Per-category envelope budgets (Goodbudget/Monarch-style)
+    func categoryBudgets() -> [CategoryBudget]
+    func setCategoryBudget(_ category: TransactionCategory, monthlyLimit: Double)
+    func removeCategoryBudget(_ category: TransactionCategory)
 }
 
 @MainActor
@@ -78,6 +88,14 @@ final class SwiftDataFinanceRepository: FinanceRepository {
         syncWidgetSnapshot()
     }
 
+    func updateSavingsGoal(amount: Double?, date: Date?) {
+        let budget = currentBudget()
+        budget.savingsGoalAmount = amount
+        budget.savingsGoalDate = date
+        budget.updatedAt = .now
+        save()
+    }
+
     func monthlySpent() -> Double {
         transactions(in: .now)
             .filter { $0.type == TransactionType.expense.rawValue }
@@ -86,6 +104,35 @@ final class SwiftDataFinanceRepository: FinanceRepository {
 
     func availableToSpend() -> Double {
         max(0, currentBudget().monthlyBudget - monthlySpent())
+    }
+
+    func spentByCategory(in monthOf: Date) -> [TransactionCategory: Double] {
+        var totals: [TransactionCategory: Double] = [:]
+        for transaction in transactions(in: monthOf) where transaction.type == TransactionType.expense.rawValue {
+            guard let category = TransactionCategory(rawValue: transaction.category) else { continue }
+            totals[category, default: 0] += transaction.amount
+        }
+        return totals
+    }
+
+    func categoryBudgets() -> [CategoryBudget] {
+        (try? context.fetch(FetchDescriptor<CategoryBudget>())) ?? []
+    }
+
+    func setCategoryBudget(_ category: TransactionCategory, monthlyLimit: Double) {
+        if let existing = categoryBudgets().first(where: { $0.category == category.rawValue }) {
+            existing.monthlyLimit = monthlyLimit
+        } else {
+            context.insert(CategoryBudget(category: category, monthlyLimit: monthlyLimit))
+        }
+        save()
+    }
+
+    func removeCategoryBudget(_ category: TransactionCategory) {
+        if let existing = categoryBudgets().first(where: { $0.category == category.rawValue }) {
+            context.delete(existing)
+            save()
+        }
     }
 
     private func save() {

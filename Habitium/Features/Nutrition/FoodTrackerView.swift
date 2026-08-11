@@ -24,6 +24,45 @@ struct FoodTrackerView: View {
                                 .listRowInsets(EdgeInsets())
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
+
+                            if viewModel.loggingStreak > 0 {
+                                Label("\(viewModel.loggingStreak) días seguidos registrando", systemImage: "flame.fill")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Theme.Colors.nutrition)
+                                    .listRowBackground(Color.clear)
+                            }
+
+                            WeightTrendCard(entries: viewModel.weightEntries) { kg in
+                                viewModel.logWeight(kg: kg)
+                            }
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                        }
+
+                        if !viewModel.recentEntries.isEmpty {
+                            Section("Repetir comida") {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 10) {
+                                        ForEach(viewModel.recentEntries) { entry in
+                                            Button {
+                                                viewModel.repeatEntry(entry)
+                                            } label: {
+                                                VStack(alignment: .leading, spacing: 4) {
+                                                    Text(entry.name).font(.caption.bold()).lineLimit(1)
+                                                    Text("\(Int(entry.calories)) kcal").font(.caption2).foregroundStyle(.secondary)
+                                                }
+                                                .padding(10)
+                                                .frame(width: 130, alignment: .leading)
+                                                .background(Theme.Colors.cardBackground)
+                                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                    }
+                                }
+                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                            }
                         }
 
                         Section("Comidas de hoy") {
