@@ -70,6 +70,13 @@ struct DayDetailView: View {
                 .strikethrough(task.isCompleted)
                 .foregroundStyle(task.isCompleted ? .secondary : .primary)
             Spacer()
+            Button {
+                viewModel.toggleFocus(task)
+            } label: {
+                Image(systemName: task.isFocus ? "star.fill" : "star")
+                    .foregroundStyle(task.isFocus ? .yellow : .secondary)
+            }
+            .buttonStyle(.plain)
             Button(role: .destructive) {
                 viewModel.deleteTask(task)
             } label: {

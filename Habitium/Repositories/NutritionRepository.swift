@@ -26,8 +26,16 @@ protocol NutritionRepository {
     /// compute the logging streak.
     func loggedDates() -> Set<Date>
 
+    /// All entries logged in the last `days` days (including today) —
+    /// used to compute an average daily intake for the adaptive goal
+    /// suggestion.
+    func entriesInLastDays(_ days: Int) -> [FoodEntry]
+
     func currentGoal() -> NutritionGoal
     func updateGoal(dailyCalories: Double, proteinGrams: Double, carbsGrams: Double, fatGrams: Double)
+    /// Opt-in settings for the adaptive calorie goal suggestion. Pass nil
+    /// for weeklyRateKg to turn the suggestion off entirely.
+    func updateAdaptiveGoalSettings(targetWeightKg: Double?, weeklyRateKg: Double?)
 
     // Weight trend (PlateLens/Lose It!-style)
     func addWeightEntry(_ entry: WeightEntry)
@@ -88,6 +96,14 @@ final class SwiftDataNutritionRepository: NutritionRepository {
         return Set(all.map { Calendar.current.startOfDay(for: $0.date) })
     }
 
+    func entriesInLastDays(_ days: Int) -> [FoodEntry] {
+        let calendar = Calendar.current
+        let start = calendar.date(byAdding: .day, value: -days, to: calendar.startOfDay(for: .now)) ?? .distantPast
+        let predicate = #Predicate<FoodEntry> { entry in entry.date >= start }
+        let descriptor = FetchDescriptor<FoodEntry>(predicate: predicate)
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
     func addWeightEntry(_ entry: WeightEntry) {
         context.insert(entry)
         save()
@@ -118,6 +134,14 @@ final class SwiftDataNutritionRepository: NutritionRepository {
         goal.updatedAt = .now
         save()
         syncWidgetSnapshot()
+    }
+
+    func updateAdaptiveGoalSettings(targetWeightKg: Double?, weeklyRateKg: Double?) {
+        let goal = currentGoal()
+        goal.targetWeightKg = targetWeightKg
+        goal.weeklyRateKg = weeklyRateKg
+        goal.updatedAt = .now
+        save()
     }
 
     private func save() {

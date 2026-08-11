@@ -19,6 +19,10 @@ final class SettingsViewModel {
     var carbsGoalGrams: Double
     var fatGoalGrams: Double
 
+    // Adaptive calorie goal (PlateLens-style) — opt-in
+    var adaptiveGoalEnabled: Bool
+    var weeklyRateKgText: String
+
     // Preferences
     var preferredAIProvider: AIProviderKind
     var mealReminderNotificationsEnabled: Bool
@@ -39,6 +43,8 @@ final class SettingsViewModel {
         proteinGoalGrams = goal.proteinGoalGrams
         carbsGoalGrams = goal.carbsGoalGrams
         fatGoalGrams = goal.fatGoalGrams
+        adaptiveGoalEnabled = goal.weeklyRateKg != nil
+        weeklyRateKgText = goal.weeklyRateKg.map { String(format: "%.2f", $0) } ?? "-0.25"
 
         let settings = container.currentUserSettings()
         preferredAIProvider = AIProviderKind(rawValue: settings.preferredAIProvider) ?? .openAI
@@ -57,6 +63,11 @@ final class SettingsViewModel {
             carbsGrams: carbsGoalGrams,
             fatGrams: fatGoalGrams
         )
+    }
+
+    func saveAdaptiveGoalSettings() {
+        let rate = adaptiveGoalEnabled ? Double(weeklyRateKgText.replacingOccurrences(of: ",", with: ".")) : nil
+        container.nutritionRepository.updateAdaptiveGoalSettings(targetWeightKg: nil, weeklyRateKg: rate)
     }
 
     func savePreferences() {

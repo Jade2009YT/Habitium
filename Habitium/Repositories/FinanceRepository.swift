@@ -34,6 +34,17 @@ protocol FinanceRepository {
     func categoryBudgets() -> [CategoryBudget]
     func setCategoryBudget(_ category: TransactionCategory, monthlyLimit: Double)
     func removeCategoryBudget(_ category: TransactionCategory)
+
+    // Recurring transactions (Monarch/EveryDollar-style fixed monthly bills)
+    func recurringTransactions() -> [RecurringTransaction]
+    func addRecurringTransaction(_ transaction: RecurringTransaction)
+    func deleteRecurringTransaction(_ transaction: RecurringTransaction)
+    func setRecurringTransactionActive(_ transaction: RecurringTransaction, isActive: Bool)
+    /// Logs a real Transaction for every active recurring item whose day
+    /// has arrived and hasn't been applied yet this month. Safe to call on
+    /// every launch/foreground — returns how many were applied.
+    @discardableResult
+    func applyDueRecurringTransactions() -> Int
 }
 
 @MainActor
@@ -133,6 +144,51 @@ final class SwiftDataFinanceRepository: FinanceRepository {
             context.delete(existing)
             save()
         }
+    }
+
+    func recurringTransactions() -> [RecurringTransaction] {
+        (try? context.fetch(FetchDescriptor<RecurringTransaction>(sortBy: [SortDescriptor(\.dayOfMonth)]))) ?? []
+    }
+
+    func addRecurringTransaction(_ transaction: RecurringTransaction) {
+        context.insert(transaction)
+        save()
+    }
+
+    func deleteRecurringTransaction(_ transaction: RecurringTransaction) {
+        context.delete(transaction)
+        save()
+    }
+
+    func setRecurringTransactionActive(_ transaction: RecurringTransaction, isActive: Bool) {
+        transaction.isActive = isActive
+        save()
+    }
+
+    @discardableResult
+    func applyDueRecurringTransactions() -> Int {
+        let calendar = Calendar.current
+        let today = Date.now
+        let currentMonthStart = calendar.monthRange(containing: today).lowerBound
+        let todayDay = calendar.component(.day, from: today)
+
+        var appliedCount = 0
+        for recurring in recurringTransactions() where recurring.isActive {
+            let alreadyAppliedThisMonth = recurring.lastAppliedMonth.map { calendar.isDate($0, equalTo: currentMonthStart, toGranularity: .month) } ?? false
+            guard !alreadyAppliedThisMonth, todayDay >= recurring.dayOfMonth,
+                  let type = TransactionType(rawValue: recurring.type),
+                  let category = TransactionCategory(rawValue: recurring.category) else { continue }
+
+            let transaction = Transaction(amount: recurring.amount, type: type, category: category, note: recurring.name)
+            context.insert(transaction)
+            recurring.lastAppliedMonth = currentMonthStart
+            appliedCount += 1
+        }
+        if appliedCount > 0 {
+            save()
+            syncWidgetSnapshot()
+        }
+        return appliedCount
     }
 
     private func save() {

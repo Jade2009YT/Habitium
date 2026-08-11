@@ -38,6 +38,15 @@ struct FoodTrackerView: View {
                             .listRowInsets(EdgeInsets())
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
+
+                            if let suggestion = viewModel.adaptiveSuggestion {
+                                AdaptiveGoalCard(suggestion: suggestion) {
+                                    viewModel.applyAdaptiveSuggestion()
+                                }
+                                .listRowInsets(EdgeInsets())
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                            }
                         }
 
                         if !viewModel.recentEntries.isEmpty {

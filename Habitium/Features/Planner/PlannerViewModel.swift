@@ -81,6 +81,16 @@ final class PlannerViewModel {
         refreshAll()
     }
 
+    /// Returns false when the task couldn't be marked as focus because
+    /// today's foco del día already has 3 tasks — the view can show a
+    /// hint in that case.
+    @discardableResult
+    func toggleFocus(_ task: PlannerTask) -> Bool {
+        let succeeded = repository.toggleFocus(task)
+        if succeeded { refreshAll() }
+        return succeeded
+    }
+
     /// Fantastical-style natural-language quick add: "Gimnasio mañana
     /// 18:00" becomes an event titled "Gimnasio" starting tomorrow at 6pm.
     func addQuickEvent(from text: String) {

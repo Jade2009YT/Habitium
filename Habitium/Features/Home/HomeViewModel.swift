@@ -20,6 +20,9 @@ final class HomeViewModel {
     private(set) var financeOverview: FinanceOverview = .init(
         availableToSpend: 0, monthlyBudget: 0, monthlySpent: 0, totalSavings: 0, currencyCode: "USD"
     )
+    /// Today's "foco del día" (Sunsama-style) — at most 3, set from the
+    /// Planner tab.
+    private(set) var focusTasks: [PlannerTask] = []
 
     private let container: AppDependencyContainer
 
@@ -32,5 +35,11 @@ final class HomeViewModel {
         nutritionProgress = container.makeCalculateRemainingCaloriesUseCase().execute()
         upcomingItems = container.makeFetchUpcomingEventsUseCase().execute(limit: 3)
         financeOverview = container.makeCalculateAvailableBudgetUseCase().execute()
+        focusTasks = container.plannerRepository.focusTasks()
+    }
+
+    func toggleFocusTask(_ task: PlannerTask) {
+        container.plannerRepository.toggleComplete(task)
+        refresh()
     }
 }

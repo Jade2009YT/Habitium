@@ -40,6 +40,7 @@ final class FinanceViewModel {
     private(set) var categoryBreakdown: [CategorySpendingRow] = []
     private(set) var savingsGoalAmount: Double?
     private(set) var savingsGoalDate: Date?
+    private(set) var recurringTransactions: [RecurringTransaction] = []
 
     private let container: AppDependencyContainer
     private var repository: FinanceRepository { container.financeRepository }
@@ -66,6 +67,8 @@ final class FinanceViewModel {
         let budget = repository.currentBudget()
         savingsGoalAmount = budget.savingsGoalAmount
         savingsGoalDate = budget.savingsGoalDate
+
+        recurringTransactions = repository.recurringTransactions()
     }
 
     func addTransaction(amount: Double, type: TransactionType, category: TransactionCategory, note: String?) {
@@ -95,6 +98,21 @@ final class FinanceViewModel {
 
     func removeCategoryLimit(_ category: TransactionCategory) {
         repository.removeCategoryBudget(category)
+        refresh()
+    }
+
+    func addRecurringTransaction(name: String, amount: Double, type: TransactionType, category: TransactionCategory, dayOfMonth: Int) {
+        repository.addRecurringTransaction(RecurringTransaction(name: name, amount: amount, type: type, category: category, dayOfMonth: dayOfMonth))
+        refresh()
+    }
+
+    func deleteRecurringTransaction(_ transaction: RecurringTransaction) {
+        repository.deleteRecurringTransaction(transaction)
+        refresh()
+    }
+
+    func setRecurringTransactionActive(_ transaction: RecurringTransaction, isActive: Bool) {
+        repository.setRecurringTransactionActive(transaction, isActive: isActive)
         refresh()
     }
 }

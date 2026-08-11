@@ -56,6 +56,10 @@ final class AppDependencyContainer {
         CalculateLoggingStreakUseCase(repository: nutritionRepository)
     }
 
+    func makeCalculateAdaptiveCalorieGoalUseCase() -> CalculateAdaptiveCalorieGoalUseCase {
+        CalculateAdaptiveCalorieGoalUseCase(repository: nutritionRepository)
+    }
+
     func currentUserSettings() -> UserSettings {
         if let existing = try? modelContext.fetch(FetchDescriptor<UserSettings>()).first {
             return existing

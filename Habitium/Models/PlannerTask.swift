@@ -48,6 +48,11 @@ final class PlannerTask {
     /// cancelled/updated if the task changes or completes.
     var notificationIdentifier: String?
 
+    /// Marks this task as one of today's "foco del día" — Sunsama-style
+    /// intentional daily planning. The repository caps this at 3 tasks at
+    /// a time (see PlannerRepository.toggleFocus).
+    var isFocus: Bool
+
     init(
         id: UUID = UUID(),
         title: String,
@@ -57,7 +62,8 @@ final class PlannerTask {
         isCompleted: Bool = false,
         priority: TaskPriority = .medium,
         createdAt: Date = .now,
-        notificationIdentifier: String? = nil
+        notificationIdentifier: String? = nil,
+        isFocus: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -68,5 +74,6 @@ final class PlannerTask {
         self.priority = priority.rawValue
         self.createdAt = createdAt
         self.notificationIdentifier = notificationIdentifier
+        self.isFocus = isFocus
     }
 }

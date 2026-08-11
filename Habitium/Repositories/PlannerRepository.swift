@@ -24,6 +24,14 @@ protocol PlannerRepository {
     func toggleComplete(_ task: PlannerTask)
     func deleteTask(_ task: PlannerTask)
 
+    /// Today's "foco del día" tasks (Sunsama-style), incomplete ones first.
+    func focusTasks() -> [PlannerTask]
+    /// Flips `isFocus`. Turning it on is a no-op (returns false) once 3
+    /// tasks are already marked as focus — keeps the list intentionally
+    /// short. Turning off always succeeds.
+    @discardableResult
+    func toggleFocus(_ task: PlannerTask) -> Bool
+
     func events(on date: Date) -> [PlannerEvent]
     func events(in range: Range<Date>) -> [PlannerEvent]
     func addEvent(_ event: PlannerEvent)
@@ -82,6 +90,24 @@ final class SwiftDataPlannerRepository: PlannerRepository {
         context.delete(task)
         save()
         syncWidgetSnapshot()
+    }
+
+    func focusTasks() -> [PlannerTask] {
+        let descriptor = FetchDescriptor<PlannerTask>(
+            predicate: #Predicate<PlannerTask> { $0.isFocus },
+            sortBy: [SortDescriptor(\.isCompleted), SortDescriptor(\.createdAt)]
+        )
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    @discardableResult
+    func toggleFocus(_ task: PlannerTask) -> Bool {
+        if !task.isFocus && focusTasks().count >= 3 {
+            return false
+        }
+        task.isFocus.toggle()
+        save()
+        return true
     }
 
     // MARK: - Events

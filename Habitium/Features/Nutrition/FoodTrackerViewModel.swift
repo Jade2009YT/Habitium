@@ -26,14 +26,20 @@ final class FoodTrackerViewModel {
     /// Last 30 weight measurements, newest first — feeds the trend mini
     /// chart (PlateLens/Lose It!-style).
     private(set) var weightEntries: [WeightEntry] = []
+    /// Suggested calorie-goal adjustment based on real weight trend vs.
+    /// logged intake — nil unless the user opted in via Settings and there
+    /// is enough history to compute one.
+    private(set) var adaptiveSuggestion: AdaptiveCalorieGoalSuggestion?
 
     var isAnalyzing = false
     var errorMessage: String?
 
     private let container: AppDependencyContainer
+    private let barcodeService: BarcodeLookupService
 
-    init(container: AppDependencyContainer) {
+    init(container: AppDependencyContainer, barcodeService: BarcodeLookupService = OpenFoodFactsService()) {
         self.container = container
+        self.barcodeService = barcodeService
         refresh()
     }
 
@@ -43,6 +49,19 @@ final class FoodTrackerViewModel {
         loggingStreak = container.makeCalculateLoggingStreakUseCase().execute()
         recentEntries = container.nutritionRepository.recentUniqueEntries(limit: 6)
         weightEntries = container.nutritionRepository.weightEntries(limit: 30)
+        adaptiveSuggestion = container.makeCalculateAdaptiveCalorieGoalUseCase().execute()
+    }
+
+    func applyAdaptiveSuggestion() {
+        guard let suggestion = adaptiveSuggestion else { return }
+        let goal = container.nutritionRepository.currentGoal()
+        container.nutritionRepository.updateGoal(
+            dailyCalories: suggestion.suggestedCalories,
+            proteinGrams: goal.proteinGoalGrams,
+            carbsGrams: goal.carbsGoalGrams,
+            fatGrams: goal.fatGoalGrams
+        )
+        refresh()
     }
 
     /// Re-logs a past entry as a new one today, same macros and meal type —
@@ -80,6 +99,28 @@ final class FoodTrackerViewModel {
             let provider = self.currentProvider()
             try await self.container.makeAnalyzeMealUseCase(provider: provider)
                 .executeWithDescription(text, mealType: mealType, analyzedBy: provider.rawValue)
+        }
+    }
+
+    /// Looks up a scanned barcode on Open Food Facts (values are per 100 g)
+    /// and scales them by the portion the user actually ate.
+    func logFromBarcode(_ barcode: String, mealType: MealType, portionGrams: Double) async {
+        await runAnalysis {
+            let result = try await self.barcodeService.lookupProduct(barcode: barcode)
+            let factor = portionGrams / 100.0
+            let entry = FoodEntry(
+                name: result.mealName,
+                mealType: mealType,
+                source: .manual,
+                calories: result.calories * factor,
+                proteinGrams: result.macros.proteinGrams * factor,
+                carbsGrams: result.macros.carbsGrams * factor,
+                fatGrams: result.macros.fatGrams * factor,
+                notes: "Código de barras · porción \(Int(portionGrams)) g",
+                analyzedBy: "openfoodfacts"
+            )
+            self.container.nutritionRepository.addEntry(entry)
+            return entry
         }
     }
 

@@ -33,6 +33,7 @@ final class PersistenceController {
             Transaction.self,
             BudgetSettings.self,
             CategoryBudget.self,
+            RecurringTransaction.self,
             UserSettings.self
         ])
 
@@ -80,6 +81,7 @@ final class PersistenceController {
             Transaction.self,
             BudgetSettings.self,
             CategoryBudget.self,
+            RecurringTransaction.self,
             UserSettings.self
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory)

@@ -29,9 +29,14 @@ struct AddMealView: View {
     @State private var manualCarbs = ""
     @State private var manualFat = ""
 
+    @State private var showingBarcodeScanner = false
+    @State private var scannedBarcode: String?
+    @State private var portionGramsText = "100"
+
     enum Mode: String, CaseIterable, Identifiable {
         case photo = "Foto"
         case text = "Texto"
+        case barcode = "Código"
         case manual = "Manual"
         var id: String { rawValue }
     }
@@ -57,6 +62,7 @@ struct AddMealView: View {
                 switch mode {
                 case .photo: photoSection
                 case .text: textSection
+                case .barcode: barcodeSection
                 case .manual: manualSection
                 }
 
@@ -87,6 +93,44 @@ struct AddMealView: View {
                 }
                 .ignoresSafeArea()
             }
+            .fullScreenCover(isPresented: $showingBarcodeScanner) {
+                BarcodeScannerView { code in
+                    scannedBarcode = code
+                    showingBarcodeScanner = false
+                }
+                .ignoresSafeArea()
+            }
+        }
+    }
+
+    private var barcodeSection: some View {
+        Section {
+            if BarcodeScannerView.isSupported {
+                if let scannedBarcode {
+                    Label("Código: \(scannedBarcode)", systemImage: "barcode.viewfinder")
+                    TextField("Porción (g)", text: $portionGramsText)
+                        .keyboardType(.decimalPad)
+                    Button("Buscar y registrar") {
+                        let grams = Double(portionGramsText.replacingOccurrences(of: ",", with: ".")) ?? 100
+                        Task {
+                            await viewModel.logFromBarcode(scannedBarcode, mealType: mealType, portionGrams: grams)
+                            if viewModel.errorMessage == nil { dismiss() }
+                        }
+                    }
+                } else {
+                    Button {
+                        showingBarcodeScanner = true
+                    } label: {
+                        Label("Escanear código de barras", systemImage: "barcode.viewfinder")
+                    }
+                }
+            } else {
+                Text("Tu dispositivo no soporta el escáner de códigos de barras en vivo.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } footer: {
+            Text("Datos de Open Food Facts, por 100 g — ajusta la porción a lo que realmente comiste.")
         }
     }
 

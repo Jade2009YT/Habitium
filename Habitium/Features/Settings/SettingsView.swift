@@ -19,6 +19,7 @@ struct SettingsView: View {
                 if let viewModel {
                     Form {
                         goalsSection(viewModel)
+                        adaptiveGoalSection(viewModel)
                         aiSection(viewModel)
                         notificationsSection(viewModel)
                         currencySection(viewModel)
@@ -65,6 +66,25 @@ struct SettingsView: View {
                     .multilineTextAlignment(.trailing)
             }
             Button("Guardar metas") { viewModel.saveGoals() }
+        }
+    }
+
+    private func adaptiveGoalSection(_ viewModel: SettingsViewModel) -> some View {
+        Section {
+            Toggle("Meta adaptativa", isOn: Bindable(viewModel).adaptiveGoalEnabled)
+                .onChange(of: viewModel.adaptiveGoalEnabled) { _, _ in viewModel.saveAdaptiveGoalSettings() }
+            if viewModel.adaptiveGoalEnabled {
+                LabeledContent("Ritmo semanal (kg)") {
+                    TextField("-0.25", text: Bindable(viewModel).weeklyRateKgText)
+                        .keyboardType(.numbersAndPunctuation)
+                        .multilineTextAlignment(.trailing)
+                        .onSubmit { viewModel.saveAdaptiveGoalSettings() }
+                }
+            }
+        } header: {
+            Text("Objetivo adaptativo")
+        } footer: {
+            Text("Negativo para perder peso, positivo para ganar, 0 para mantener. Habitium comparará tu peso real con lo que registras y te sugerirá ajustar la meta de calorías — necesitas al menos 10 días con pesajes y comidas registradas.")
         }
     }
 

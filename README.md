@@ -219,20 +219,21 @@ la App Store, y adapté lo más valioso de cada una:
 | **Fantastical** (4.6★, Apple Design Award) | Crear eventos escribiendo en lenguaje natural | `NaturalLanguageQuickAdd`, `QuickAddBar` |
 | **Structured** | Vista de línea de tiempo por horas, no solo una lista | `DayTimelineView` |
 
-### Backlog (no implementado todavía, a propósito)
+Segunda ronda — el resto del backlog, ya cerrado:
 
-Para no meter media docena de features a medias, dejé fuera de esta ronda:
+| Inspirado en | Qué hace bien | Dónde está en Habitium |
+|---|---|---|
+| **PlateLens** | Objetivo de calorías que se recalibra solo según tu tendencia real de peso | `CalculateAdaptiveCalorieGoalUseCase`, `AdaptiveGoalCard` (opt-in en Ajustes) |
+| **Sunsama** | "Foco del día" — 1-3 prioridades en vez de una lista larga | `PlannerTask.isFocus`, tarjeta en `HomeView` |
+| **Monarch Money** / **EveryDollar** | Gastos/ingresos fijos que se registran solos cada mes | `RecurringTransaction`, `RecurringTransactionsSheet` |
+| **MyFitnessPal** / **Fooducate** | Escanear el código de barras de un producto envasado | `BarcodeScannerView` (VisionKit) + `OpenFoodFactsService` (API gratuita, sin key) |
 
-- **Escáner de código de barras** (MyFitnessPal/Fooducate) — rápido para
-  alimentos envasados; Habitium ya cubre ese caso con foto + IA, así que es
-  redundante hasta que se note que hace falta.
-- **Transacciones recurrentes** (Monarch/EveryDollar) — alta automática de
-  gastos fijos (alquiler, suscripciones) cada mes.
-- **"Enfoque del día" / Top 3** (Sunsama) — elegir 1-3 prioridades del día en
-  vez de solo listar tareas.
-- **Recalibración automática del objetivo de calorías** según la tendencia
-  real de peso (lo que hace único a PlateLens) — por ahora el objetivo es
-  el que pones tú a mano en Ajustes.
+### Backlog restante (a propósito, no implementado)
+
+- Notificaciones inteligentes basadas en patrones de uso.
+- Compartir/exportar reportes (PDF o imagen) del resumen mensual.
+- Sincronización opcional entre dispositivos propios (seguiría siendo
+  100% tuyo, sin backend de terceros) — hoy cada instalación es independiente.
 
 ## Otros próximos pasos sugeridos
 

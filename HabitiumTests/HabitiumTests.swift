@@ -54,8 +54,13 @@ private final class FakeNutritionRepository: NutritionRepository {
     func updateGoal(dailyCalories: Double, proteinGrams: Double, carbsGrams: Double, fatGrams: Double) {
         goal.dailyCalorieGoal = dailyCalories
     }
+    func updateAdaptiveGoalSettings(targetWeightKg: Double?, weeklyRateKg: Double?) {
+        goal.targetWeightKg = targetWeightKg
+        goal.weeklyRateKg = weeklyRateKg
+    }
     func recentUniqueEntries(limit: Int) -> [FoodEntry] { Array(entriesToday.prefix(limit)) }
     func loggedDates() -> Set<Date> { Set(entriesToday.map { Calendar.current.startOfDay(for: $0.date) }) }
+    func entriesInLastDays(_ days: Int) -> [FoodEntry] { entriesToday }
 
     var storedWeights: [WeightEntry] = []
     func addWeightEntry(_ entry: WeightEntry) { storedWeights.append(entry) }
@@ -90,4 +95,11 @@ private final class FakeFinanceRepository: FinanceRepository {
     }
     func setCategoryBudget(_ category: TransactionCategory, monthlyLimit: Double) { budgets[category] = monthlyLimit }
     func removeCategoryBudget(_ category: TransactionCategory) { budgets.removeValue(forKey: category) }
+
+    var storedRecurring: [RecurringTransaction] = []
+    func recurringTransactions() -> [RecurringTransaction] { storedRecurring }
+    func addRecurringTransaction(_ transaction: RecurringTransaction) { storedRecurring.append(transaction) }
+    func deleteRecurringTransaction(_ transaction: RecurringTransaction) { storedRecurring.removeAll { $0.id == transaction.id } }
+    func setRecurringTransactionActive(_ transaction: RecurringTransaction, isActive: Bool) { transaction.isActive = isActive }
+    func applyDueRecurringTransactions() -> Int { 0 }
 }

@@ -15,6 +15,7 @@ struct FinanceView: View {
     @State private var showingAddTransaction = false
     @State private var showingEditBudget = false
     @State private var showingCategoryBudgets = false
+    @State private var showingRecurring = false
 
     var body: some View {
         NavigationStack {
@@ -96,6 +97,9 @@ struct FinanceView: View {
                     Button("Editar presupuesto y ahorro") {
                         showingEditBudget = true
                     }
+                    Button("Gastos recurrentes") {
+                        showingRecurring = true
+                    }
                 }
             }
             .sheet(isPresented: $showingAddTransaction, onDismiss: { viewModel?.refresh() }) {
@@ -106,6 +110,9 @@ struct FinanceView: View {
             }
             .sheet(isPresented: $showingCategoryBudgets, onDismiss: { viewModel?.refresh() }) {
                 if let viewModel { CategoryBudgetsSheet(viewModel: viewModel) }
+            }
+            .sheet(isPresented: $showingRecurring, onDismiss: { viewModel?.refresh() }) {
+                if let viewModel { RecurringTransactionsSheet(viewModel: viewModel) }
             }
             .onAppear {
                 if viewModel == nil {

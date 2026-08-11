@@ -19,6 +19,9 @@ struct HomeView: View {
             ScrollView {
                 if let viewModel {
                     VStack(spacing: Theme.Layout.sectionSpacing) {
+                        if !viewModel.focusTasks.isEmpty {
+                            focusCard(viewModel)
+                        }
                         caloriesCard(viewModel)
                         upcomingCard(viewModel)
                         budgetCard(viewModel)
@@ -47,6 +50,32 @@ struct HomeView: View {
                 }
             }
         }
+    }
+
+    private func focusCard(_ viewModel: HomeViewModel) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Foco de hoy", systemImage: "star.fill")
+                .font(.headline)
+                .foregroundStyle(.yellow)
+
+            ForEach(viewModel.focusTasks) { task in
+                Button {
+                    viewModel.toggleFocusTask(task)
+                } label: {
+                    HStack {
+                        Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(task.isCompleted ? Theme.Colors.planner : .secondary)
+                        Text(task.title)
+                            .strikethrough(task.isCompleted)
+                            .foregroundStyle(task.isCompleted ? .secondary : .primary)
+                        Spacer()
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle()
     }
 
     private func caloriesCard(_ viewModel: HomeViewModel) -> some View {

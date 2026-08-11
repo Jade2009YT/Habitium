@@ -34,6 +34,7 @@ struct HabitiumApp: App {
                 .task {
                     NotificationScheduler.shared.requestAuthorizationIfNeeded()
                     PendingActionProcessor.processPendingTaskCompletions(using: container.plannerRepository)
+                    container.financeRepository.applyDueRecurringTransactions()
                     deepLinkCoordinator.checkForPendingLink()
                 }
         }
@@ -41,6 +42,7 @@ struct HabitiumApp: App {
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
             PendingActionProcessor.processPendingTaskCompletions(using: container.plannerRepository)
+            container.financeRepository.applyDueRecurringTransactions()
             deepLinkCoordinator.checkForPendingLink()
         }
     }
