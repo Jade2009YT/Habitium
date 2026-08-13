@@ -11,6 +11,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppDependencyContainer.self) private var container
     @Environment(AppleSignInManager.self) private var authManager
+    @Environment(AppLockManager.self) private var lockManager
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: SettingsViewModel?
 
@@ -20,6 +21,7 @@ struct SettingsView: View {
                 if let viewModel {
                     Form {
                         accountSection
+                        securitySection
                         goalsSection(viewModel)
                         adaptiveGoalSection(viewModel)
                         aiSection(viewModel)
@@ -68,6 +70,16 @@ struct SettingsView: View {
             Text("Cuenta")
         } footer: {
             Text("Iniciaste sesión con Sign in with Apple. Tus datos siguen en este iPhone al cerrar sesión — solo se te pedirá volver a entrar.")
+        }
+    }
+
+    private var securitySection: some View {
+        Section {
+            Toggle("Bloqueo con \(lockManager.biometryDescription)", isOn: Bindable(lockManager).isEnabled)
+        } header: {
+            Text("Seguridad")
+        } footer: {
+            Text("Con esto activado, Habitium te pide \(lockManager.biometryDescription) cada vez que abres la app o vuelves de segundo plano — además de haber iniciado sesión con Apple. Tus fotos de comida y el resto de datos también se guardan cifrados en el dispositivo.")
         }
     }
 
@@ -236,4 +248,5 @@ private struct SubscriptionStatusRow: View {
     SettingsView()
         .environment(AppDependencyContainer(modelContext: PersistenceController.preview().container.mainContext))
         .environment(AppleSignInManager())
+        .environment(AppLockManager())
 }

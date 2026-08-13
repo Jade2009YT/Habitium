@@ -20,6 +20,7 @@ struct HabitiumApp: App {
     @State private var container: AppDependencyContainer
     @State private var deepLinkCoordinator = DeepLinkCoordinator()
     @State private var authManager = AppleSignInManager()
+    @State private var lockManager = AppLockManager()
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -33,19 +34,28 @@ struct HabitiumApp: App {
                 .environment(container)
                 .environment(deepLinkCoordinator)
                 .environment(authManager)
+                .environment(lockManager)
                 .task {
                     NotificationScheduler.shared.requestAuthorizationIfNeeded()
                     PendingActionProcessor.processPendingTaskCompletions(using: container.plannerRepository)
                     container.financeRepository.applyDueRecurringTransactions()
                     deepLinkCoordinator.checkForPendingLink()
+                    lockManager.lockIfNeeded()
                 }
         }
         .modelContainer(persistence.container)
         .onChange(of: scenePhase) { _, newPhase in
-            guard newPhase == .active else { return }
-            PendingActionProcessor.processPendingTaskCompletions(using: container.plannerRepository)
-            container.financeRepository.applyDueRecurringTransactions()
-            deepLinkCoordinator.checkForPendingLink()
+            switch newPhase {
+            case .active:
+                PendingActionProcessor.processPendingTaskCompletions(using: container.plannerRepository)
+                container.financeRepository.applyDueRecurringTransactions()
+                deepLinkCoordinator.checkForPendingLink()
+                lockManager.lockIfNeeded()
+            case .background:
+                lockManager.lockOnBackground()
+            default:
+                break
+            }
         }
     }
 }

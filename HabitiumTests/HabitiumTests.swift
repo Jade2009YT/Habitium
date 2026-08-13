@@ -50,6 +50,7 @@ private final class FakeNutritionRepository: NutritionRepository {
     func entries(on date: Date) -> [FoodEntry] { entriesToday }
     func addEntry(_ entry: FoodEntry) { entriesToday.append(entry) }
     func deleteEntry(_ entry: FoodEntry) { entriesToday.removeAll { $0.id == entry.id } }
+    func decryptedPhoto(for entry: FoodEntry) async -> Data? { entry.imageData }
     func currentGoal() -> NutritionGoal { goal }
     func updateGoal(dailyCalories: Double, proteinGrams: Double, carbsGrams: Double, fatGrams: Double) {
         goal.dailyCalorieGoal = dailyCalories

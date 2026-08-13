@@ -8,6 +8,7 @@
 
 import Foundation
 import Observation
+import UIKit
 
 @MainActor
 @Observable
@@ -79,6 +80,14 @@ final class FoodTrackerViewModel {
         )
         container.nutritionRepository.addEntry(copy)
         refresh()
+    }
+
+    /// Decrypts and decodes a meal's stored photo — triggers Face ID/Touch
+    /// ID (see SecureEnclaveCrypto). Returns nil if there's no photo, or
+    /// decryption fails/is cancelled.
+    func decryptedImage(for entry: FoodEntry) async -> UIImage? {
+        guard let data = await container.nutritionRepository.decryptedPhoto(for: entry) else { return nil }
+        return UIImage(data: data)
     }
 
     func logWeight(kg: Double) {

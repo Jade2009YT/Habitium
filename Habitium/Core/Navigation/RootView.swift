@@ -12,6 +12,7 @@ import SwiftUI
 struct RootView: View {
     @Environment(AppDependencyContainer.self) private var container
     @Environment(AppleSignInManager.self) private var authManager
+    @Environment(AppLockManager.self) private var lockManager
 
     var body: some View {
         Group {
@@ -19,6 +20,9 @@ struct RootView: View {
                 Color(.systemBackground).ignoresSafeArea()
             } else if authManager.isSignedIn {
                 MainTabView()
+                    .fullScreenCover(isPresented: lockedBinding) {
+                        AppLockView()
+                    }
             } else {
                 LoginView()
             }
@@ -34,5 +38,9 @@ struct RootView: View {
             guard newValue != nil else { return }
             container.applyAppleIdentity(displayName: authManager.lastGrantedDisplayName, email: authManager.lastGrantedEmail)
         }
+    }
+
+    private var lockedBinding: Binding<Bool> {
+        Binding(get: { !lockManager.isUnlocked }, set: { _ in })
     }
 }

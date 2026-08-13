@@ -13,6 +13,7 @@ struct FoodTrackerView: View {
     @Environment(DeepLinkCoordinator.self) private var deepLinkCoordinator
     @State private var viewModel: FoodTrackerViewModel?
     @State private var showingAddMeal = false
+    @State private var viewingPhotoEntry: FoodEntry?
 
     var body: some View {
         NavigationStack {
@@ -112,6 +113,11 @@ struct FoodTrackerView: View {
                     AddMealView(viewModel: viewModel)
                 }
             }
+            .sheet(item: $viewingPhotoEntry) { entry in
+                if let viewModel {
+                    MealPhotoViewerSheet(entry: entry, viewModel: viewModel)
+                }
+            }
             .onAppear {
                 if viewModel == nil {
                     viewModel = FoodTrackerViewModel(container: container)
@@ -138,6 +144,15 @@ struct FoodTrackerView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
+            if entry.imageData != nil {
+                Button {
+                    viewingPhotoEntry = entry
+                } label: {
+                    Image(systemName: "photo.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 }

@@ -17,6 +17,11 @@ protocol NutritionRepository {
     func addEntry(_ entry: FoodEntry)
     func deleteEntry(_ entry: FoodEntry)
 
+    /// Decrypts a meal photo for viewing (see SecureEnclaveCrypto) —
+    /// prompts Face ID/Touch ID. Returns nil if the entry has no photo or
+    /// decryption fails/is cancelled.
+    func decryptedPhoto(for entry: FoodEntry) async -> Data?
+
     /// Most recent entries, deduplicated by name (latest occurrence wins) —
     /// feeds the "repetir comida" quick-add list (à la Lose It!'s
     /// favorites/recents).
@@ -64,6 +69,12 @@ final class SwiftDataNutritionRepository: NutritionRepository {
     }
 
     func addEntry(_ entry: FoodEntry) {
+        // Meal photos are the one blob worth the extra protection — encrypt
+        // in place before it ever touches disk. This is fast and never
+        // prompts Face ID (see SecureEnclaveCrypto).
+        if let rawImage = entry.imageData {
+            entry.imageData = (try? SecureEnclaveCrypto.shared.encrypt(rawImage)) ?? rawImage
+        }
         context.insert(entry)
         save()
         syncWidgetSnapshot()
@@ -73,6 +84,13 @@ final class SwiftDataNutritionRepository: NutritionRepository {
         context.delete(entry)
         save()
         syncWidgetSnapshot()
+    }
+
+    func decryptedPhoto(for entry: FoodEntry) async -> Data? {
+        guard let encrypted = entry.imageData else { return nil }
+        return await Task.detached(priority: .userInitiated) {
+            try? SecureEnclaveCrypto.shared.decrypt(encrypted)
+        }.value
     }
 
     func recentUniqueEntries(limit: Int) -> [FoodEntry] {

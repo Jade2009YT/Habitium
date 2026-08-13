@@ -64,6 +64,7 @@ targets:
         NSCameraUsageDescription: "Habitium usa la camara para fotografiar tus comidas y estimar sus calorias y macronutrientes."
         NSPhotoLibraryUsageDescription: "Habitium accede a tus fotos para analizar comidas guardadas en tu galeria."
         NSUserNotificationsUsageDescription: "Habitium envia recordatorios de tus tareas, eventos y registros de comidas."
+        NSFaceIDUsageDescription: "Habitium usa Face ID para bloquear el acceso a tus datos personales."
         OPENAI_API_KEY: $(OPENAI_API_KEY)
         ANTHROPIC_API_KEY: $(ANTHROPIC_API_KEY)
         APP_GROUP_ID: $(APP_GROUP_ID)

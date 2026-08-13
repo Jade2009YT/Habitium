@@ -120,6 +120,43 @@ Requiere que actives la capability **Sign in with Apple** en el target
 (`com.apple.developer.applesignin`), pero Xcode necesita tu cuenta de
 desarrollador conectada para firmarlo.
 
+## Seguridad local (App Lock + cifrado en reposo)
+
+Sign in with Apple responde a "¿quién eres?". Esto de aquí responde a "¿quién
+tiene tu iPhone desbloqueado en la mano ahora mismo?" — son capas
+independientes, a propósito, y todo sigue sin servidor:
+
+- **App Lock con Face ID/Touch ID** (`Core/Security/AppLockManager.swift`):
+  Habitium se bloquea cada vez que vuelve de segundo plano, y solo se abre
+  con biometría (o el código del dispositivo como respaldo). Se puede
+  desactivar en **Ajustes → Seguridad**, pero viene activado por defecto.
+- **Cifrado en reposo (Data Protection)**
+  (`Core/Persistence/PersistenceController.swift`): el almacén de SwiftData
+  se marca con `NSFileProtectionComplete`, la clase de protección más
+  fuerte de iOS — el archivo es ilegible en cuanto el teléfono se bloquea,
+  incluso para quien tuviera acceso físico al disco. El identificador de
+  Sign in with Apple en el Keychain usa
+  `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` (nunca viajero en un backup
+  a otro dispositivo).
+- **Fotos de comida cifradas con una clave del Secure Enclave**
+  (`Core/Security/SecureEnclaveCrypto.swift`): la clave de cifrado se genera
+  *dentro* del chip Secure Enclave y nunca sale de él. Guardar una foto no
+  pide Face ID (usa solo la mitad pública de la clave); **verla** sí lo pide
+  (botón 🖼️ junto a cualquier comida registrada con foto), porque esa
+  operación sí usa la mitad privada, protegida por biometría.
+
+En conjunto: si alguien coge tu iPhone desbloqueado, igual sigue sin poder
+entrar a Habitium (App Lock). Si de algún modo accediera a los archivos en
+crudo, están cifrados salvo que el teléfono esté desbloqueado (Data
+Protection). Y las fotos de tus comidas necesitan tu cara, literalmente, para
+poder verse.
+
+**Compromiso a tener en cuenta**: con `NSFileProtectionComplete`, ninguna
+tarea en segundo plano puede tocar la base de datos mientras el teléfono
+está bloqueado — Habitium no lo necesita hoy (todo pasa en primer plano o
+vía el snapshot de los widgets, que vive aparte en `UserDefaults`), pero si
+algún día añades algo que sí lo necesite, tenlo presente.
+
 ## Licencia "Habitium Pro" (StoreKit 2) — preparada pero apagada
 
 Hay dos formas de desbloquear "Pro" ya montadas en
@@ -183,8 +220,10 @@ Habitium/
 │   │   ├── Persistence/             # SwiftData ModelContainer
 │   │   ├── Networking/              # Clientes de OpenAI / Claude
 │   │   ├── Notifications/           # Recordatorios locales
-│   │   ├── Camera/                  # Captura de foto con cámara (UIImagePickerController)
-│   │   ├── Monetization/            # StoreKit 2 — suscripción "Habitium Pro"
+│   │   ├── Camera/                  # Captura de foto/código de barras (VisionKit)
+│   │   ├── Auth/                    # Sign in with Apple + Keychain
+│   │   ├── Security/                # App Lock (Face ID) + cifrado Secure Enclave
+│   │   ├── Monetization/            # StoreKit 2 — suscripción/licencia "Habitium Pro"
 │   │   ├── DeepLink/                # Enruta acciones desde los widgets
 │   │   ├── Sync/                    # Aplica acciones pendientes de los widgets
 │   │   ├── Widgets/                 # WidgetCenter.reloadTimelines wrapper
@@ -193,11 +232,12 @@ Habitium/
 │   ├── Repositories/                # Protocolo + implementación SwiftData
 │   ├── UseCases/                    # Lógica de negocio (capa de dominio)
 │   ├── Features/                    # Un folder por pestaña (MVVM)
+│   │   ├── Auth/                     # LoginView, AppLockView
 │   │   ├── Home/                     # Dashboard unificado
-│   │   ├── Nutrition/                # FoodTrackerView + IA (cámara/galería/texto)
+│   │   ├── Nutrition/                # FoodTrackerView + IA (cámara/galería/texto/código)
 │   │   ├── Planner/                  # Calendario, tareas, notas
 │   │   ├── Finance/                  # Ingresos/gastos, presupuesto
-│   │   └── Settings/                 # Metas, proveedor de IA, notificaciones, moneda
+│   │   └── Settings/                 # Metas, cuenta, seguridad, IA, notificaciones, moneda
 │   └── Resources/Assets.xcassets
 ├── HabitiumWidgets/                # Extensión de WidgetKit
 │   ├── HabitiumWidgetsBundle.swift  # @main WidgetBundle
