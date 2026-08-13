@@ -19,6 +19,7 @@ struct HabitiumApp: App {
     // Root dependency container (Clean Architecture composition root).
     @State private var container: AppDependencyContainer
     @State private var deepLinkCoordinator = DeepLinkCoordinator()
+    @State private var authManager = AppleSignInManager()
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -28,9 +29,10 @@ struct HabitiumApp: App {
 
     var body: some Scene {
         WindowGroup {
-            MainTabView()
+            RootView()
                 .environment(container)
                 .environment(deepLinkCoordinator)
+                .environment(authManager)
                 .task {
                     NotificationScheduler.shared.requestAuthorizationIfNeeded()
                     PendingActionProcessor.processPendingTaskCompletions(using: container.plannerRepository)

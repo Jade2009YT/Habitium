@@ -10,6 +10,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppDependencyContainer.self) private var container
+    @Environment(AppleSignInManager.self) private var authManager
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: SettingsViewModel?
 
@@ -18,6 +19,7 @@ struct SettingsView: View {
             Group {
                 if let viewModel {
                     Form {
+                        accountSection
                         goalsSection(viewModel)
                         adaptiveGoalSection(viewModel)
                         aiSection(viewModel)
@@ -40,6 +42,32 @@ struct SettingsView: View {
                     viewModel = SettingsViewModel(container: container)
                 }
             }
+        }
+    }
+
+    private var accountSection: some View {
+        Section {
+            HStack {
+                Image(systemName: "person.crop.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading) {
+                    Text(container.currentUserSettings().displayName ?? "Tu cuenta de Apple")
+                        .font(.subheadline.bold())
+                    if let email = container.currentUserSettings().email {
+                        Text(email).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+            }
+            Button("Cerrar sesión", role: .destructive) {
+                authManager.signOut()
+                dismiss()
+            }
+        } header: {
+            Text("Cuenta")
+        } footer: {
+            Text("Iniciaste sesión con Sign in with Apple. Tus datos siguen en este iPhone al cerrar sesión — solo se te pedirá volver a entrar.")
         }
     }
 
@@ -207,4 +235,5 @@ private struct SubscriptionStatusRow: View {
 #Preview {
     SettingsView()
         .environment(AppDependencyContainer(modelContext: PersistenceController.preview().container.mainContext))
+        .environment(AppleSignInManager())
 }

@@ -18,6 +18,7 @@ adelante.
   interactivos vía App Intents, para pantalla de inicio y pantalla de bloqueo
 - **IA**: OpenAI (GPT-4o Vision) o Claude (Anthropic), seleccionable por el
   usuario, para analizar fotos/texto de comidas
+- **Login**: Sign in with Apple — sin backend, sin contraseñas que proteger
 - **Notificaciones**: `UserNotifications` local (sin push remoto)
 - **Generación del proyecto Xcode**: [XcodeGen](https://github.com/yonaskolb/XcodeGen)
   a partir de `project.yml` — el `.xcodeproj` no se versiona (ver `.gitignore`)
@@ -91,6 +92,33 @@ código es una **suscripción en la App Store vía StoreKit 2** (ver siguiente
 sección) — mismo proyecto, sin reescrituras. Android quedaría como una
 decisión futura independiente, el día que de verdad quieras invertir en
 ello.
+
+## Inicio de sesión (Sign in with Apple)
+
+Habitium pide iniciar sesión con Apple antes de mostrar la app
+(`Core/Auth/`). Se eligió esto en vez de un sistema de email/contraseña a
+medida porque, para lo que necesita esta app, resuelve todo sin montar ni
+pagar ningún servidor:
+
+- **Apple verifica la identidad** (Face ID/Touch ID + tu Apple ID) — no hay
+  contraseñas ni emails que Habitium tenga que proteger o filtrar por error.
+- **Cero coste, cero mantenimiento.** No hay backend que tú tengas que
+  pagar, actualizar o asegurar.
+- **No hace falta para que las compras funcionen en varios dispositivos** —
+  eso ya lo resuelve StoreKit solo (ver la siguiente sección). Este login es
+  puramente de identidad: guarda tu nombre/email (solo la primera vez que
+  Apple te los cede) en `UserSettings`, y el identificador estable de Apple
+  en el Keychain (`Core/Auth/KeychainStore.swift`), nunca en texto plano.
+- **"Cerrar sesión"** (en Ajustes) no borra ningún dato — solo te vuelve a
+  pedir el login. Todo tu contenido sigue en el dispositivo.
+- Si revocas el permiso desde **Ajustes del iPhone → tu nombre → Sign in
+  with Apple**, Habitium lo detecta en el siguiente arranque
+  (`credentialState(forUserID:)`) y te saca la sesión automáticamente.
+
+Requiere que actives la capability **Sign in with Apple** en el target
+`Habitium` con tu Team — XcodeGen ya genera el entitlement
+(`com.apple.developer.applesignin`), pero Xcode necesita tu cuenta de
+desarrollador conectada para firmarlo.
 
 ## Licencia "Habitium Pro" (StoreKit 2) — preparada pero apagada
 

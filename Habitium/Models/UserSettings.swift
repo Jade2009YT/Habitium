@@ -2,7 +2,11 @@
 //  UserSettings.swift
 //  Habitium
 //
-//  App-wide preferences that don't belong to a single feature module.
+//  App-wide preferences that don't belong to a single feature module,
+//  plus the non-secret bits of the signed-in identity (display name,
+//  email). The actual Sign in with Apple credential — the stable user
+//  identifier StoreKit-adjacent auth relies on — lives in the Keychain
+//  (see KeychainStore/AppleSignInManager), not here.
 //
 
 import Foundation
@@ -29,15 +33,25 @@ final class UserSettings {
     var mealReminderNotificationsEnabled: Bool
     var eventNotificationsEnabled: Bool
 
+    /// Captured from Sign in with Apple the first time it's granted (Apple
+    /// only hands these over once per user/app) — display-only, never
+    /// used as a secret.
+    var displayName: String?
+    var email: String?
+
     init(
         id: UUID = UUID(),
         preferredAIProvider: AIProviderKind = .openAI,
         mealReminderNotificationsEnabled: Bool = true,
-        eventNotificationsEnabled: Bool = true
+        eventNotificationsEnabled: Bool = true,
+        displayName: String? = nil,
+        email: String? = nil
     ) {
         self.id = id
         self.preferredAIProvider = preferredAIProvider.rawValue
         self.mealReminderNotificationsEnabled = mealReminderNotificationsEnabled
         self.eventNotificationsEnabled = eventNotificationsEnabled
+        self.displayName = displayName
+        self.email = email
     }
 }

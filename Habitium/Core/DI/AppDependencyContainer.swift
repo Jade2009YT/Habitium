@@ -77,4 +77,14 @@ final class AppDependencyContainer {
         settings.eventNotificationsEnabled = eventNotifications
         try? modelContext.save()
     }
+
+    /// Persists the display name/email Sign in with Apple hands over on
+    /// first authorization. Only overwrites a field when a new non-nil
+    /// value is provided, since Apple won't send them again later.
+    func applyAppleIdentity(displayName: String?, email: String?) {
+        let settings = currentUserSettings()
+        if let displayName { settings.displayName = displayName }
+        if let email { settings.email = email }
+        try? modelContext.save()
+    }
 }
