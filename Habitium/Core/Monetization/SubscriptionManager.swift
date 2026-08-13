@@ -2,18 +2,26 @@
 //  SubscriptionManager.swift
 //  Habitium
 //
-//  StoreKit 2 wrapper for a single auto-renewable subscription
-//  ("Habitium Pro", monthly). This is scaffolding for a *possible* future
-//  App Store release — for personal use nothing in the app checks
+//  StoreKit 2 wrapper for two ways to unlock "Habitium Pro": an
+//  auto-renewable monthly subscription, or a non-consumable one-time
+//  "lifetime" purchase. This is scaffolding for a *possible* future App
+//  Store release — for personal use nothing in the app checks
 //  `isProActive`, so the app is fully unlocked regardless of purchase
 //  state. If you ever publish and want to gate a feature, read
 //  `isProActive` from the environment and branch in the view.
 //
 //  Testing locally costs nothing: Xcode's StoreKit Testing framework reads
-//  Configuration/Habitium.storekit (already set up with the monthly
-//  product) when you select it under Scheme → Options → StoreKit
-//  Configuration, so you can exercise the whole purchase flow in the
-//  Simulator without an App Store Connect account.
+//  Configuration/Habitium.storekit (already set up with both products)
+//  when you select it under Scheme → Options → StoreKit Configuration, so
+//  you can exercise the whole purchase flow in the Simulator without an
+//  App Store Connect account.
+//
+//  Licensing note: this does NOT require any login system to work across
+//  a user's devices. StoreKit entitlements are tied to their Apple ID
+//  automatically — "Restaurar compras" re-syncs on any device signed in
+//  with the same Apple ID. A custom account system would only be needed
+//  for something StoreKit can't do (e.g. syncing app *data*, not just
+//  purchase status, or a non-Apple platform).
 //
 
 import Foundation
@@ -21,11 +29,12 @@ import Observation
 import StoreKit
 
 enum HabitiumProduct {
-    /// Must match the product identifier configured both in
+    /// Must match the product identifiers configured both in
     /// Configuration/Habitium.storekit (local testing) and, eventually, in
     /// App Store Connect (real release).
     static let proMonthly = "com.habitium.app.pro.monthly"
-    static let all: Set<String> = [proMonthly]
+    static let lifetime = "com.habitium.app.lifetime"
+    static let all: Set<String> = [proMonthly, lifetime]
 }
 
 @MainActor
@@ -33,9 +42,16 @@ enum HabitiumProduct {
 final class SubscriptionManager {
 
     private(set) var products: [Product] = []
-    private(set) var isProActive: Bool = false
+    private(set) var isSubscriptionActive: Bool = false
+    private(set) var isLifetimeOwned: Bool = false
     private(set) var isLoading: Bool = false
     var errorMessage: String?
+
+    /// Unlocked either way — subscribed monthly, or bought once for life.
+    var isProActive: Bool { isSubscriptionActive || isLifetimeOwned }
+
+    var monthlyProduct: Product? { products.first { $0.id == HabitiumProduct.proMonthly } }
+    var lifetimeProduct: Product? { products.first { $0.id == HabitiumProduct.lifetime } }
 
     private var updatesTask: Task<Void, Never>?
 
@@ -64,7 +80,15 @@ final class SubscriptionManager {
     }
 
     func purchaseProMonthly() async {
-        guard let product = products.first(where: { $0.id == HabitiumProduct.proMonthly }) else {
+        guard let product = monthlyProduct else {
+            errorMessage = "Producto no disponible. Configura Habitium.storekit en el scheme de Xcode o publica el producto en App Store Connect."
+            return
+        }
+        await purchase(product)
+    }
+
+    func purchaseLifetime() async {
+        guard let product = lifetimeProduct else {
             errorMessage = "Producto no disponible. Configura Habitium.storekit en el scheme de Xcode o publica el producto en App Store Connect."
             return
         }
@@ -105,12 +129,17 @@ final class SubscriptionManager {
     }
 
     private func refreshEntitlements() async {
-        var active = false
+        var subscriptionActive = false
+        var lifetimeOwned = false
         for await result in Transaction.currentEntitlements {
-            if case .verified(let transaction) = result, transaction.productID == HabitiumProduct.proMonthly {
-                active = transaction.revocationDate == nil
+            guard case .verified(let transaction) = result, transaction.revocationDate == nil else { continue }
+            if transaction.productID == HabitiumProduct.proMonthly {
+                subscriptionActive = true
+            } else if transaction.productID == HabitiumProduct.lifetime {
+                lifetimeOwned = true
             }
         }
-        isProActive = active
+        isSubscriptionActive = subscriptionActive
+        isLifetimeOwned = lifetimeOwned
     }
 }

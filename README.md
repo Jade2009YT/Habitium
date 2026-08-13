@@ -92,23 +92,34 @@ sección) — mismo proyecto, sin reescrituras. Android quedaría como una
 decisión futura independiente, el día que de verdad quieras invertir en
 ello.
 
-## Suscripción "Habitium Pro" (StoreKit 2) — preparada pero apagada
+## Licencia "Habitium Pro" (StoreKit 2) — preparada pero apagada
 
-Hay una base de suscripción mensual (5,00 €) ya montada en
-`Core/Monetization/SubscriptionManager.swift`, pensada para si algún día
+Hay dos formas de desbloquear "Pro" ya montadas en
+`Core/Monetization/SubscriptionManager.swift`, pensadas para si algún día
 publicas la app:
 
+- **Suscripción mensual** — `com.habitium.app.pro.monthly`, 5,00 €/mes.
+- **Pago único de por vida** — `com.habitium.app.lifetime`, 100,00 €,
+  compra no-consumible (una sola vez, sin renovación).
+
+Detalles:
+
 - **Ahora mismo no bloquea nada.** Toda la app está desbloqueada para ti,
-  uses o no la suscripción — es solo scaffolding.
-- Para probarla localmente sin gastar nada ni tocar App Store Connect: abre
+  compres o no — es solo scaffolding.
+- Para probarlo localmente sin gastar nada ni tocar App Store Connect: abre
   el scheme `Habitium` en Xcode → **Edit Scheme → Run → Options → StoreKit
   Configuration** → selecciona `Configuration/Habitium.storekit`. Así puedes
-  simular compras y renovaciones en el Simulator.
-- El estado de la suscripción se ve en **Ajustes → Habitium Pro** dentro de
-  la app (accesible desde el ⚙️ en la pantalla de inicio).
-- Si algún día publicas de verdad, crea el producto
-  `com.habitium.app.pro.monthly` en App Store Connect con el mismo
-  identificador y ya funciona contra el sistema real.
+  simular ambas compras en el Simulator.
+- El estado se ve en **Ajustes → Habitium Pro** dentro de la app (accesible
+  desde el ⚙️ en la pantalla de inicio).
+- **No hace falta ningún sistema de login para que esto funcione en varios
+  dispositivos tuyos.** StoreKit ata la compra a tu Apple ID automáticamente
+  — "Restaurar compras" la recupera en cualquier iPhone donde inicies sesión
+  con esa misma cuenta. Un sistema de cuentas propio solo haría falta para
+  cosas que StoreKit no cubre (sincronizar tus *datos*, no solo si pagaste,
+  o si algún día hubiera una versión no-Apple).
+- Si algún día publicas de verdad, crea ambos productos en App Store Connect
+  con esos mismos identificadores y ya funciona contra el sistema real.
 
 ## Gestión de secretos
 

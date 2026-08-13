@@ -1,7 +1,23 @@
 {
   "identifier" : "8F3A9C10",
   "nonRenewingSubscriptions" : [],
-  "products" : [],
+  "products" : [
+    {
+      "displayPrice" : "100.00",
+      "familyShareable" : false,
+      "internalID" : "6446AA40",
+      "localizations" : [
+        {
+          "description" : "Acceso de por vida a Habitium Pro, pago único — sin renovaciones.",
+          "displayName" : "Habitium Lifetime",
+          "locale" : "es_ES"
+        }
+      ],
+      "productID" : "com.habitium.app.lifetime",
+      "referenceName" : "Habitium Lifetime",
+      "type" : "NonConsumable"
+    }
+  ],
   "settings" : {
     "_locale" : "es_ES"
   },

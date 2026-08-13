@@ -162,7 +162,7 @@ private struct SubscriptionStatusRow: View {
             HStack {
                 Image(systemName: subscriptionManager.isProActive ? "checkmark.seal.fill" : "seal")
                     .foregroundStyle(subscriptionManager.isProActive ? .green : .secondary)
-                Text(subscriptionManager.isProActive ? "Pro activo" : "Sin suscripción activa")
+                Text(statusText)
                 Spacer()
             }
 
@@ -173,10 +173,17 @@ private struct SubscriptionStatusRow: View {
                     if subscriptionManager.isLoading {
                         ProgressView()
                     } else {
-                        Text("Suscribirse — 5,00 €/mes")
+                        Text("Suscribirse — \(subscriptionManager.monthlyProduct?.displayPrice ?? "5,00 €")/mes")
                     }
                 }
                 .buttonStyle(.borderedProminent)
+
+                Button {
+                    Task { await subscriptionManager.purchaseLifetime() }
+                } label: {
+                    Text("Comprar de por vida — \(subscriptionManager.lifetimeProduct?.displayPrice ?? "100,00 €") (pago único)")
+                }
+                .buttonStyle(.bordered)
             }
 
             Button("Restaurar compras") {
@@ -188,6 +195,12 @@ private struct SubscriptionStatusRow: View {
                 Text(error).font(.caption).foregroundStyle(Theme.Colors.danger)
             }
         }
+    }
+
+    private var statusText: String {
+        if subscriptionManager.isLifetimeOwned { return "Pro activo — de por vida" }
+        if subscriptionManager.isSubscriptionActive { return "Pro activo — mensual" }
+        return "Sin suscripción activa"
     }
 }
 
