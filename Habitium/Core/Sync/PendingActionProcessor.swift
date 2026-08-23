@@ -2,9 +2,9 @@
 //  PendingActionProcessor.swift
 //  Habitium
 //
-//  Drains widget-queued actions (currently just task completions — see
-//  CompleteTaskIntent) against the real SwiftData store. Call on app
-//  launch and whenever the app becomes active.
+//  Drains widget-queued actions (task completions — CompleteTaskIntent —
+//  and medication doses — MarkDoseTakenIntent) against the real SwiftData
+//  store. Call on app launch and whenever the app becomes active.
 //
 
 import Foundation
@@ -21,5 +21,18 @@ enum PendingActionProcessor {
             repository.toggleComplete(task)
         }
         SharedDataStore.clearPendingTaskCompletions()
+    }
+
+    static func processPendingMedicationDoses(using repository: MedicationRepository) {
+        let pending = SharedDataStore.pendingMedicationDoses()
+        guard !pending.isEmpty else { return }
+
+        let todaysDoses = repository.todaysDoses()
+        for entry in pending {
+            guard let dose = todaysDoses.first(where: { $0.medicationID == entry.medicationID && $0.minuteOfDay == entry.minuteOfDay }),
+                  dose.isPending else { continue }
+            repository.markDoseTaken(dose)
+        }
+        SharedDataStore.clearPendingMedicationDoses()
     }
 }

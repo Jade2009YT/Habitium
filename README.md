@@ -206,12 +206,14 @@ Habitium/
 │   ├── Debug.xcconfig
 │   ├── Release.xcconfig
 │   └── Habitium.storekit           # Config. local de StoreKit para probar la suscripción
-├── Shared/                         # Compilado en AMBOS targets (app + widgets)
+├── Shared/                         # Compilado en LOS TRES targets (app + widgets + watch)
 │   ├── AppGroup.swift               # ID del App Group
 │   ├── WidgetKind.swift             # Identificadores de cada widget
 │   ├── SharedDataStore.swift        # Snapshots Codable en UserDefaults(App Group)
 │   ├── PendingWidgetActions.swift   # Cola de acciones widget → app
 │   └── Intents/                     # App Intents para widgets interactivos
+├── SharedWatch/                    # Compilado SOLO en app + watch (no en la extensión de widgets)
+│   └── WatchConnectivityBridge.swift # Sincroniza los 4 snapshots iPhone → Watch
 ├── Habitium/                       # Target de la app
 │   ├── App/                         # Entry point + configuración
 │   ├── Core/
@@ -237,13 +239,19 @@ Habitium/
 │   │   ├── Nutrition/                # FoodTrackerView + IA (cámara/galería/texto/código)
 │   │   ├── Planner/                  # Calendario, tareas, notas
 │   │   ├── Finance/                  # Ingresos/gastos, presupuesto
+│   │   ├── Medication/                # Recordatorios y tomas de medicación
 │   │   └── Settings/                 # Metas, cuenta, seguridad, IA, notificaciones, moneda
 │   └── Resources/Assets.xcassets
-├── HabitiumWidgets/                # Extensión de WidgetKit
+├── HabitiumWidgets/                # Extensión de WidgetKit (iOS)
 │   ├── HabitiumWidgetsBundle.swift  # @main WidgetBundle
 │   ├── NutritionWidget.swift
 │   ├── FinanceWidget.swift
-│   └── CalendarWidget.swift
+│   ├── CalendarWidget.swift
+│   └── MedicationWidget.swift
+├── HabitiumWatch/                  # App de watchOS (v1, solo lectura)
+│   ├── HabitiumWatchApp.swift       # @main
+│   ├── WatchSummaryView.swift       # Única pantalla — resumen de las 4 áreas
+│   └── Assets.xcassets
 └── HabitiumTests/                  # Unit tests de UseCases (con fakes)
 ```
 
@@ -267,21 +275,76 @@ La composición de dependencias ocurre en un único lugar:
 
 ## Widgets interactivos
 
-Los tres widgets (`NutritionWidget`, `FinanceWidget`, `CalendarWidget`) leen
-snapshots `Codable` desde `SharedDataStore` (respaldado por
-`UserDefaults(suiteName: APP_GROUP_ID)`) en vez de acceder a SwiftData
-directamente — así evitamos contención entre procesos. Cada repositorio de
-la app actualiza el snapshot correspondiente y llama a
+Los cuatro widgets (`NutritionWidget`, `FinanceWidget`, `CalendarWidget`,
+`MedicationWidget`) leen snapshots `Codable` desde `SharedDataStore`
+(respaldado por `UserDefaults(suiteName: APP_GROUP_ID)`) en vez de acceder a
+SwiftData directamente — así evitamos contención entre procesos. Cada
+repositorio de la app actualiza el snapshot correspondiente y llama a
 `WidgetCenter.reloadTimelines` justo después de escribir en SwiftData.
 
 Interactividad (App Intents en `Shared/Intents/`):
 
 - **Escanear comida** / **Registrar gasto**: `openAppWhenRun = true` — abre
   la app y, vía `DeepLinkCoordinator`, navega directo al flujo correspondiente.
-- **Completar tarea**: `openAppWhenRun = false` — actualiza el snapshot al
-  instante (el widget refleja el cambio sin abrir la app) y encola la
-  finalización real, que `PendingActionProcessor` aplica a SwiftData la
-  próxima vez que la app pasa a primer plano.
+- **Completar tarea** / **Marcar toma de medicación**: `openAppWhenRun =
+  false` — actualiza el snapshot al instante (el widget refleja el cambio
+  sin abrir la app) y encola la escritura real, que `PendingActionProcessor`
+  aplica a SwiftData la próxima vez que la app pasa a primer plano.
+
+## Medicación
+
+Sección nueva (`Features/Medication/`, accesible desde la tarjeta
+"Medicación" en Inicio — no es una pestaña nueva, mismo patrón que Ajustes):
+
+- Cada medicamento (`Medication`) tiene uno o más horarios de toma al día
+  (`reminderMinutesSinceMidnight`), cada uno con su propio recordatorio local
+  repetido a diario (`NotificationScheduler.scheduleMedicationReminders`).
+- `MedicationDoseLog` registra si cada toma de cada día se marcó como
+  **tomada** o **omitida** — así "Hoy" en `MedicationView` siempre refleja el
+  estado real, no solo si existe el recordatorio.
+- Se puede desactivar un medicamento sin borrarlo (cancela sus
+  notificaciones pero conserva el historial).
+- Tiene su propio widget con botón interactivo "marcar tomada" —
+  mismo patrón que el de completar tareas.
+
+## Apple Watch (v1 — solo lectura)
+
+Solo Apple Watch: "cualquier reloj digital" no es viable con Swift/SwiftUI —
+Garmin, Wear OS, etc. son sistemas operativos distintos, con SDKs propios;
+sería un proyecto aparte por completo (igual que pasaba con Google Play).
+
+Lo que hay montado en `HabitiumWatch/` (target watchOS independiente,
+`project.yml`) y `SharedWatch/`:
+
+- Una pantalla única y glanceable: calorías restantes, próxima toma de
+  medicación, próximo evento, saldo disponible — el resumen de Inicio, pero
+  en la muñeca.
+- **Sincronización unidireccional iPhone → Watch** vía `WatchConnectivity`
+  (`SharedWatch/WatchConnectivityBridge.swift`), no App Groups — el iPhone y
+  el Watch son dispositivos físicos distintos con almacenamiento separado,
+  así que un App Group no comparte nada entre ellos por sí solo. Cada vez
+  que un repositorio escribe algo, además de refrescar los widgets, empuja
+  los cuatro snapshots al reloj con `updateApplicationContext` ("el último
+  gana", ideal para datos de un vistazo, no necesita que ninguna app esté
+  en primer plano).
+
+**Qué falta a propósito (v2, más delicado):**
+- **Interactuar desde el reloj** (marcar una toma como hecha, completar una
+  tarea) — necesita sincronización en las dos direcciones, con manejo de
+  conflictos si ambos dispositivos cambian algo casi a la vez. Nada de eso
+  está montado todavía.
+- **Complicación para la esfera del reloj** — necesitaría otro target
+  (extensión de widgets para watchOS) encima del target de la app; lo dejé
+  fuera de esta ronda para no arriesgar la configuración del target
+  principal, que ya es la parte más delicada de todo el `project.yml`.
+
+**Aviso honesto**: el target de watchOS es, con diferencia, el tipo de
+target más delicado de configurar bien a ciegas (sin poder compilar yo
+mismo para comprobarlo). Si `xcodegen generate` o Xcode se quejan de
+`HabitiumWatch`, el plan B está anotado como comentario en el propio
+`project.yml`: borra ese target de ahí, añade uno nuevo a mano en Xcode
+(**File → New → Target → watchOS → App**), y apunta sus fuentes a
+`HabitiumWatch/` y `SharedWatch/`.
 
 ## Lo mejor de las apps mejor valoradas, adaptado a Habitium
 

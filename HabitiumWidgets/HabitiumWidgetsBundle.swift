@@ -2,8 +2,8 @@
 //  HabitiumWidgetsBundle.swift
 //  HabitiumWidgets
 //
-//  Entry point for the widget extension — registers all three Habitium
-//  widgets (nutrition, finance, calendar).
+//  Entry point for the widget extension — registers all four Habitium
+//  widgets (nutrition, finance, calendar, medicación).
 //
 
 import WidgetKit
@@ -15,5 +15,6 @@ struct HabitiumWidgetsBundle: WidgetBundle {
         NutritionWidget()
         FinanceWidget()
         CalendarWidget()
+        MedicationWidget()
     }
 }

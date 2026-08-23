@@ -182,6 +182,7 @@ final class SwiftDataNutritionRepository: NutritionRepository {
         )
         SharedDataStore.writeNutritionSnapshot(snapshot)
         WidgetRefresher.reloadNutritionWidget()
+        WatchConnectivityBridge.shared.sendCurrentSnapshots()
     }
 }
 

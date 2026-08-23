@@ -18,9 +18,18 @@ enum PendingDeepLink: String, Codable {
     case addExpense
 }
 
+/// Identifies one scheduled dose (medicationID + which of its daily
+/// time slots) so the app can apply the same "mark taken" the widget did
+/// optimistically, against the real MedicationDoseLog.
+struct PendingMedicationDose: Codable, Equatable {
+    var medicationID: UUID
+    var minuteOfDay: Int
+}
+
 extension SharedDataStore {
     private static var pendingCompletionsKey: String { "widget.pending.taskCompletions" }
     private static var pendingDeepLinkKey: String { "widget.pending.deepLink" }
+    private static var pendingMedicationDosesKey: String { "widget.pending.medicationDoses" }
 
     static func queueTaskCompletion(id: UUID) {
         var ids = pendingTaskCompletions()
@@ -41,6 +50,28 @@ extension SharedDataStore {
 
     static func clearPendingTaskCompletions() {
         UserDefaults(suiteName: AppGroup.identifier)?.removeObject(forKey: pendingCompletionsKey)
+    }
+
+    static func queueMedicationDoseTaken(medicationID: UUID, minuteOfDay: Int) {
+        var doses = pendingMedicationDoses()
+        let entry = PendingMedicationDose(medicationID: medicationID, minuteOfDay: minuteOfDay)
+        guard !doses.contains(entry) else { return }
+        doses.append(entry)
+        if let data = try? JSONEncoder().encode(doses) {
+            UserDefaults(suiteName: AppGroup.identifier)?.set(data, forKey: pendingMedicationDosesKey)
+        }
+    }
+
+    static func pendingMedicationDoses() -> [PendingMedicationDose] {
+        guard let data = UserDefaults(suiteName: AppGroup.identifier)?.data(forKey: pendingMedicationDosesKey),
+              let doses = try? JSONDecoder().decode([PendingMedicationDose].self, from: data) else {
+            return []
+        }
+        return doses
+    }
+
+    static func clearPendingMedicationDoses() {
+        UserDefaults(suiteName: AppGroup.identifier)?.removeObject(forKey: pendingMedicationDosesKey)
     }
 
     static func writePendingDeepLink(_ link: PendingDeepLink) {

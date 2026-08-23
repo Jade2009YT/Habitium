@@ -194,5 +194,6 @@ final class SwiftDataPlannerRepository: PlannerRepository {
         }
         SharedDataStore.writeCalendarSnapshot(CalendarWidgetSnapshot(items: items, updatedAt: .now))
         WidgetRefresher.reloadCalendarWidget()
+        WatchConnectivityBridge.shared.sendCurrentSnapshots()
     }
 }

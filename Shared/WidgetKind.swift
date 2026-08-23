@@ -11,4 +11,5 @@ enum WidgetKind {
     static let nutrition = "HabitiumNutritionWidget"
     static let finance = "HabitiumFinanceWidget"
     static let calendar = "HabitiumCalendarWidget"
+    static let medication = "HabitiumMedicationWidget"
 }

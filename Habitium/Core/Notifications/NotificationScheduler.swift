@@ -72,4 +72,32 @@ final class NotificationScheduler {
     func cancelDailyMealReminder() {
         center.removePendingNotificationRequests(withIdentifiers: ["daily-meal-reminder"])
     }
+
+    /// Schedules one daily-repeating reminder per entry in
+    /// `minutesSinceMidnight` for a medication, returning the identifiers
+    /// in the same order so the caller can persist them on the Medication
+    /// model and cancel them precisely later (e.g. if the schedule
+    /// changes or the medication is deleted).
+    func scheduleMedicationReminders(medicationName: String, dosage: String?, minutesSinceMidnight: [Int]) -> [String] {
+        minutesSinceMidnight.map { minute in
+            let identifier = "medication-\(UUID().uuidString)"
+            let content = UNMutableNotificationContent()
+            content.title = "Toma tu medicación"
+            content.body = dosage.map { "\(medicationName) — \($0)" } ?? medicationName
+            content.sound = .default
+
+            var components = DateComponents()
+            components.hour = minute / 60
+            components.minute = minute % 60
+            let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+            let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+            center.add(request)
+            return identifier
+        }
+    }
+
+    func cancelReminders(identifiers: [String]) {
+        guard !identifiers.isEmpty else { return }
+        center.removePendingNotificationRequests(withIdentifiers: identifiers)
+    }
 }

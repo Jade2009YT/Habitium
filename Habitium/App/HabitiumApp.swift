@@ -37,7 +37,9 @@ struct HabitiumApp: App {
                 .environment(lockManager)
                 .task {
                     NotificationScheduler.shared.requestAuthorizationIfNeeded()
+                    _ = WatchConnectivityBridge.shared // activates the WCSession so the Watch app gets synced
                     PendingActionProcessor.processPendingTaskCompletions(using: container.plannerRepository)
+                    PendingActionProcessor.processPendingMedicationDoses(using: container.medicationRepository)
                     container.financeRepository.applyDueRecurringTransactions()
                     deepLinkCoordinator.checkForPendingLink()
                     lockManager.lockIfNeeded()
@@ -48,6 +50,7 @@ struct HabitiumApp: App {
             switch newPhase {
             case .active:
                 PendingActionProcessor.processPendingTaskCompletions(using: container.plannerRepository)
+                PendingActionProcessor.processPendingMedicationDoses(using: container.medicationRepository)
                 container.financeRepository.applyDueRecurringTransactions()
                 deepLinkCoordinator.checkForPendingLink()
                 lockManager.lockIfNeeded()

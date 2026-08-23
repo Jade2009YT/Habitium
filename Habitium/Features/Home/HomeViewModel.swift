@@ -23,6 +23,7 @@ final class HomeViewModel {
     /// Today's "foco del día" (Sunsama-style) — at most 3, set from the
     /// Planner tab.
     private(set) var focusTasks: [PlannerTask] = []
+    private(set) var pendingMedicationDoses: [MedicationDose] = []
 
     private let container: AppDependencyContainer
 
@@ -36,6 +37,7 @@ final class HomeViewModel {
         upcomingItems = container.makeFetchUpcomingEventsUseCase().execute(limit: 3)
         financeOverview = container.makeCalculateAvailableBudgetUseCase().execute()
         focusTasks = container.plannerRepository.focusTasks()
+        pendingMedicationDoses = container.medicationRepository.todaysDoses().filter { $0.isPending }
     }
 
     func toggleFocusTask(_ task: PlannerTask) {

@@ -22,6 +22,7 @@ struct HomeView: View {
                         if !viewModel.focusTasks.isEmpty {
                             focusCard(viewModel)
                         }
+                        medicationCard(viewModel)
                         caloriesCard(viewModel)
                         upcomingCard(viewModel)
                         budgetCard(viewModel)
@@ -76,6 +77,43 @@ struct HomeView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardStyle()
+    }
+
+    private func medicationCard(_ viewModel: HomeViewModel) -> some View {
+        NavigationLink {
+            MedicationView()
+        } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("Medicación", systemImage: "pills.fill")
+                    .font(.headline)
+                    .foregroundStyle(.purple)
+
+                if viewModel.pendingMedicationDoses.isEmpty {
+                    Text("Sin tomas pendientes ahora mismo.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else {
+                    // Read-only preview — tap the whole card to open
+                    // Medicación and mark doses taken/skipped there.
+                    // (A nested Button here wouldn't receive its own taps:
+                    // the NavigationLink label swallows the gesture.)
+                    ForEach(viewModel.pendingMedicationDoses.prefix(3)) { dose in
+                        HStack {
+                            Image(systemName: "pills.fill")
+                                .foregroundStyle(.purple)
+                            Text(dose.medicationName).font(.subheadline)
+                            Spacer()
+                            Text(dose.scheduledDate.formatted(date: .omitted, time: .shortened))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .cardStyle()
+        }
+        .buttonStyle(.plain)
     }
 
     private func caloriesCard(_ viewModel: HomeViewModel) -> some View {

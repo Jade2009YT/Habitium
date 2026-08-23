@@ -206,6 +206,7 @@ final class SwiftDataFinanceRepository: FinanceRepository {
         )
         SharedDataStore.writeFinanceSnapshot(snapshot)
         WidgetRefresher.reloadFinanceWidget()
+        WatchConnectivityBridge.shared.sendCurrentSnapshots()
     }
 }
 

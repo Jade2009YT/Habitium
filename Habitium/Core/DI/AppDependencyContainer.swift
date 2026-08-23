@@ -18,6 +18,7 @@ final class AppDependencyContainer {
     let nutritionRepository: NutritionRepository
     let plannerRepository: PlannerRepository
     let financeRepository: FinanceRepository
+    let medicationRepository: MedicationRepository
     /// StoreKit scaffold for a possible future "Habitium Pro" subscription.
     /// Nothing in the app currently checks `isProActive` — everything is
     /// unlocked for personal use.
@@ -30,6 +31,7 @@ final class AppDependencyContainer {
         self.nutritionRepository = SwiftDataNutritionRepository(context: modelContext)
         self.plannerRepository = SwiftDataPlannerRepository(context: modelContext)
         self.financeRepository = SwiftDataFinanceRepository(context: modelContext)
+        self.medicationRepository = SwiftDataMedicationRepository(context: modelContext)
     }
 
     // MARK: - Use case factories

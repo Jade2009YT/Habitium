@@ -70,6 +70,32 @@ struct CalendarWidgetSnapshot: Codable {
     )
 }
 
+struct MedicationWidgetSnapshot: Codable {
+    /// Identifies a dose for the widget's "mark taken" button —
+    /// medicationID as a String (Codable-friendly) + which of that
+    /// medication's daily time slots this is.
+    struct DoseIdentifier: Codable, Equatable {
+        var medicationID: String
+        var minuteOfDay: Int
+    }
+
+    var nextDoseName: String?
+    var nextDoseDosage: String?
+    var nextDoseTime: Date?
+    var nextDoseIdentifier: DoseIdentifier?
+    var pendingCount: Int
+    var updatedAt: Date
+
+    static let placeholder = MedicationWidgetSnapshot(
+        nextDoseName: "Ibuprofeno",
+        nextDoseDosage: "400 mg",
+        nextDoseTime: .now.addingTimeInterval(3600),
+        nextDoseIdentifier: DoseIdentifier(medicationID: UUID().uuidString, minuteOfDay: 540),
+        pendingCount: 2,
+        updatedAt: .now
+    )
+}
+
 /// Thin wrapper around the shared UserDefaults suite. Safe to call from
 /// either the app or the widget extension.
 enum SharedDataStore {
@@ -82,6 +108,7 @@ enum SharedDataStore {
         static let nutrition = "widget.nutrition.snapshot"
         static let finance = "widget.finance.snapshot"
         static let calendar = "widget.calendar.snapshot"
+        static let medication = "widget.medication.snapshot"
     }
 
     // MARK: - Nutrition
@@ -112,6 +139,16 @@ enum SharedDataStore {
 
     static func readCalendarSnapshot() -> CalendarWidgetSnapshot {
         read(CalendarWidgetSnapshot.self, forKey: Key.calendar) ?? .placeholder
+    }
+
+    // MARK: - Medication
+
+    static func writeMedicationSnapshot(_ snapshot: MedicationWidgetSnapshot) {
+        write(snapshot, forKey: Key.medication)
+    }
+
+    static func readMedicationSnapshot() -> MedicationWidgetSnapshot {
+        read(MedicationWidgetSnapshot.self, forKey: Key.medication) ?? .placeholder
     }
 
     // MARK: - Generic helpers

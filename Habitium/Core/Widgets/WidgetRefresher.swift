@@ -22,6 +22,10 @@ enum WidgetRefresher {
         WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.calendar)
     }
 
+    static func reloadMedicationWidget() {
+        WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.medication)
+    }
+
     static func reloadAll() {
         WidgetCenter.shared.reloadAllTimelines()
     }
