@@ -32,11 +32,15 @@ struct LoginView: View {
             Spacer()
 
             VStack(spacing: 12) {
-                SignInWithAppleButton(.continue) { request in
-                    request.requestedScopes = [.fullName, .email]
-                } onCompletion: { result in
-                    authManager.handle(result: result)
-                }
+                SignInWithAppleButton(
+                    .continue,
+                    onRequest: { request in
+                        request.requestedScopes = [.fullName, .email]
+                    },
+                    onCompletion: { result in
+                        authManager.handle(result: result)
+                    }
+                )
                 .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
                 .frame(height: 50)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
