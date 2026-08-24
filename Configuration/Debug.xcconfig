@@ -12,6 +12,9 @@
 // hasn't been created yet.
 OPENAI_API_KEY =
 ANTHROPIC_API_KEY =
+SUPABASE_URL_SCHEME = https
+SUPABASE_URL_HOST =
+SUPABASE_ANON_KEY =
 APP_GROUP_ID = group.com.habitium.app
 
 PRODUCT_BUNDLE_IDENTIFIER = com.habitium.app

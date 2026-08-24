@@ -49,10 +49,10 @@ open Habitium.xcodeproj
 
 En Xcode:
 
-1. Selecciona tu Team en **Signing & Capabilities** para los targets
-   `Habitium` y `HabitiumWidgetsExtension`.
+1. Selecciona tu Team en **Signing & Capabilities** para los tres targets:
+   `Habitium`, `HabitiumWidgetsExtension` y `HabitiumWatch`.
 2. Confirma que el **App Group** `group.com.habitium.app` (o el que hayas
-   puesto en `APP_GROUP_ID`) está habilitado en ambos targets — XcodeGen ya
+   puesto en `APP_GROUP_ID`) está habilitado en los tres — XcodeGen ya
    genera los `.entitlements` con esa capability, pero el grupo debe existir
    en tu cuenta de desarrollador (Xcode lo puede crear automáticamente con
    "Fix Issue" si falta).
@@ -93,12 +93,14 @@ sección) — mismo proyecto, sin reescrituras. Android quedaría como una
 decisión futura independiente, el día que de verdad quieras invertir en
 ello.
 
-## Inicio de sesión (Sign in with Apple)
+## Inicio de sesión (Sign in with Apple + email/contraseña)
 
-Habitium pide iniciar sesión con Apple antes de mostrar la app
-(`Core/Auth/`). Se eligió esto en vez de un sistema de email/contraseña a
-medida porque, para lo que necesita esta app, resuelve todo sin montar ni
-pagar ningún servidor:
+`LoginView` ofrece dos formas de entrar, cualquiera de las dos desbloquea la
+app (`RootView` comprueba `authManager.isSignedIn || emailAuth.isSignedIn`):
+
+### Sign in with Apple
+
+Sin backend, sin contraseñas que proteger:
 
 - **Apple verifica la identidad** (Face ID/Touch ID + tu Apple ID) — no hay
   contraseñas ni emails que Habitium tenga que proteger o filtrar por error.
@@ -109,8 +111,6 @@ pagar ningún servidor:
   puramente de identidad: guarda tu nombre/email (solo la primera vez que
   Apple te los cede) en `UserSettings`, y el identificador estable de Apple
   en el Keychain (`Core/Auth/KeychainStore.swift`), nunca en texto plano.
-- **"Cerrar sesión"** (en Ajustes) no borra ningún dato — solo te vuelve a
-  pedir el login. Todo tu contenido sigue en el dispositivo.
 - Si revocas el permiso desde **Ajustes del iPhone → tu nombre → Sign in
   with Apple**, Habitium lo detecta en el siguiente arranque
   (`credentialState(forUserID:)`) y te saca la sesión automáticamente.
@@ -119,6 +119,43 @@ Requiere que actives la capability **Sign in with Apple** en el target
 `Habitium` con tu Team — XcodeGen ya genera el entitlement
 (`com.apple.developer.applesignin`), pero Xcode necesita tu cuenta de
 desarrollador conectada para firmarlo.
+
+### Registro con email y contraseña (Supabase Auth)
+
+Para quien prefiera crear una cuenta clásica en vez de usar su Apple ID.
+**Importante: la cuenta es solo identidad — tus datos (comidas, medicación,
+finanzas, notas) siguen guardándose exclusivamente en tu iPhone.** Supabase
+nunca ve nada de eso, solo tu email y tu contraseña (con hash, nunca en
+texto plano — así es como funciona cualquier sistema de autenticación serio).
+
+Puesta en marcha:
+
+1. Crea un proyecto gratis en [supabase.com](https://supabase.com).
+2. En el proyecto: **Project Settings → API** — copia la **Project URL** y
+   la **anon/public key**.
+3. En `Configuration/Secrets.xcconfig`, rellena:
+   ```
+   SUPABASE_URL_SCHEME = https
+   SUPABASE_URL_HOST = tu-proyecto.supabase.co
+   SUPABASE_ANON_KEY = tu_clave_anon
+   ```
+   (la URL va partida en dos porque `//` es un comentario en formato
+   xcconfig — `AppConfiguration.swift` la reconstruye).
+4. En Supabase, **Authentication → Providers → Email** ya viene con
+   "Confirm email" activado por defecto — así el registro pide verificar el
+   correo antes de dejar entrar, tal y como lo montamos.
+
+Si no rellenas las claves, `SupabaseAuthManager.isConfigured` es `false` y
+`LoginView` simplemente no muestra la opción de email — Sign in with Apple
+sigue funcionando igual.
+
+**Aviso honesto**: `SupabaseAuthManager.swift` usa la API de
+`supabase-swift` v2 (`client.auth.signUp/signIn/signOut/resend/
+resetPasswordForEmail`) tal y como la documenta Supabase, pero lo escribí
+sin poder compilarlo contra el paquete real. Si Xcode marca algún nombre de
+método como inexistente, casi seguro es un renombrado casi idéntico (mira
+el autocompletado de `client.auth.` — la arquitectura de alrededor no
+debería tener que cambiar, solo esa línea).
 
 ## Seguridad local (App Lock + cifrado en reposo)
 

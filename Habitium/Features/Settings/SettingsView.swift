@@ -11,6 +11,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppDependencyContainer.self) private var container
     @Environment(AppleSignInManager.self) private var authManager
+    @Environment(SupabaseAuthManager.self) private var emailAuth
     @Environment(AppLockManager.self) private var lockManager
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: SettingsViewModel?
@@ -54,23 +55,42 @@ struct SettingsView: View {
                     .font(.title2)
                     .foregroundStyle(.secondary)
                 VStack(alignment: .leading) {
-                    Text(container.currentUserSettings().displayName ?? "Tu cuenta de Apple")
+                    Text(accountDisplayName)
                         .font(.subheadline.bold())
-                    if let email = container.currentUserSettings().email {
-                        Text(email).font(.caption).foregroundStyle(.secondary)
-                    }
+                    Text(accountMethodDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
             }
             Button("Cerrar sesión", role: .destructive) {
-                authManager.signOut()
-                dismiss()
+                Task {
+                    authManager.signOut()
+                    await emailAuth.signOut()
+                    dismiss()
+                }
             }
         } header: {
             Text("Cuenta")
         } footer: {
-            Text("Iniciaste sesión con Sign in with Apple. Tus datos siguen en este iPhone al cerrar sesión — solo se te pedirá volver a entrar.")
+            Text("Tus datos siguen en este iPhone al cerrar sesión — solo se te pedirá volver a entrar.")
         }
+    }
+
+    private var accountDisplayName: String {
+        if let displayName = container.currentUserSettings().displayName, !displayName.isEmpty {
+            return displayName
+        }
+        if case .signedIn(let email) = emailAuth.state, !email.isEmpty {
+            return email
+        }
+        return container.currentUserSettings().email ?? "Tu cuenta"
+    }
+
+    private var accountMethodDescription: String {
+        if emailAuth.isSignedIn { return "Correo y contraseña" }
+        if authManager.isSignedIn { return "Sign in with Apple" }
+        return ""
     }
 
     private var securitySection: some View {
@@ -79,7 +99,7 @@ struct SettingsView: View {
         } header: {
             Text("Seguridad")
         } footer: {
-            Text("Con esto activado, Habitium te pide \(lockManager.biometryDescription) cada vez que abres la app o vuelves de segundo plano — además de haber iniciado sesión con Apple. Tus fotos de comida y el resto de datos también se guardan cifrados en el dispositivo.")
+            Text("Con esto activado, Habitium te pide \(lockManager.biometryDescription) cada vez que abres la app o vuelves de segundo plano — además de haber iniciado sesión. Tus fotos de comida y el resto de datos también se guardan cifrados en el dispositivo.")
         }
     }
 
@@ -248,5 +268,6 @@ private struct SubscriptionStatusRow: View {
     SettingsView()
         .environment(AppDependencyContainer(modelContext: PersistenceController.preview().container.mainContext))
         .environment(AppleSignInManager())
+        .environment(SupabaseAuthManager())
         .environment(AppLockManager())
 }

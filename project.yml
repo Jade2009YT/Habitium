@@ -37,7 +37,17 @@ configFiles:
   Debug: Configuration/Debug.xcconfig
   Release: Configuration/Release.xcconfig
 
-packages: {}
+packages:
+  Supabase:
+    url: https://github.com/supabase-community/supabase-swift
+    from: "2.0.0"
+    # Depends on the "Supabase" umbrella product (SupabaseClient) rather
+    # than the bare Auth module — it's the officially documented pattern
+    # and handles the auth endpoint URL/headers correctly. Only
+    # client.auth is actually used (email/password sign-up + sign-in +
+    # verification + password reset) — see SupabaseAuthManager. The
+    # Postgres/Storage/Realtime pieces it also pulls in aren't used since
+    # app data stays local, but they add no real weight until called.
 
 targets:
   Habitium:
@@ -69,6 +79,9 @@ targets:
         NSFaceIDUsageDescription: "Habitium usa Face ID para bloquear el acceso a tus datos personales."
         OPENAI_API_KEY: $(OPENAI_API_KEY)
         ANTHROPIC_API_KEY: $(ANTHROPIC_API_KEY)
+        SUPABASE_URL_SCHEME: $(SUPABASE_URL_SCHEME)
+        SUPABASE_URL_HOST: $(SUPABASE_URL_HOST)
+        SUPABASE_ANON_KEY: $(SUPABASE_ANON_KEY)
         APP_GROUP_ID: $(APP_GROUP_ID)
         ITSAppUsesNonExemptEncryption: false
         UIApplicationSceneManifest:
@@ -78,6 +91,8 @@ targets:
         embed: true
       - target: HabitiumWatch
         embed: true
+      - package: Supabase
+        product: Supabase
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.habitium.app
