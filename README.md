@@ -250,7 +250,8 @@ Habitium/
 │   ├── PendingWidgetActions.swift   # Cola de acciones widget → app
 │   └── Intents/                     # App Intents para widgets interactivos
 ├── SharedWatch/                    # Compilado SOLO en app + watch (no en la extensión de widgets)
-│   └── WatchConnectivityBridge.swift # Sincroniza los 4 snapshots iPhone → Watch
+│   ├── WatchConnectivityBridge.swift # Sincroniza snapshots iPhone → Watch y series Watch → iPhone
+│   └── LoggedWorkoutSet.swift       # Formato de una serie contada, cruza el WatchConnectivity
 ├── Habitium/                       # Target de la app
 │   ├── App/                         # Entry point + configuración
 │   ├── Core/
@@ -267,8 +268,8 @@ Habitium/
 │   │   ├── Sync/                    # Aplica acciones pendientes de los widgets
 │   │   ├── Widgets/                 # WidgetCenter.reloadTimelines wrapper
 │   │   └── DI/                      # AppDependencyContainer (composition root)
-│   ├── Models/                      # @Model de SwiftData (capa de datos)
-│   ├── Repositories/                # Protocolo + implementación SwiftData
+│   ├── Models/                      # @Model de SwiftData (capa de datos, incl. WorkoutSet)
+│   ├── Repositories/                # Protocolo + implementación SwiftData (incl. WorkoutRepository)
 │   ├── UseCases/                    # Lógica de negocio (capa de dominio)
 │   ├── Features/                    # Un folder por pestaña (MVVM)
 │   │   ├── Auth/                     # LoginView, AppLockView
@@ -286,9 +287,12 @@ Habitium/
 │   ├── FinanceWidget.swift
 │   ├── CalendarWidget.swift
 │   └── MedicationWidget.swift
-├── HabitiumWatch/                  # App de watchOS (v1, solo lectura)
+├── HabitiumWatch/                  # App de watchOS
 │   ├── HabitiumWatchApp.swift       # @main
-│   ├── WatchSummaryView.swift       # Única pantalla — resumen de las 4 áreas
+│   ├── WatchSummaryView.swift       # Resumen de las 4 áreas + botón para entrenar
+│   ├── WorkoutSessionManager.swift  # HKWorkoutSession/HKLiveWorkoutBuilder — mantiene vivo CoreMotion
+│   ├── RepCounter.swift             # Contador de repeticiones (CoreMotion, detección de picos)
+│   ├── WorkoutView.swift            # Pantalla de entrenamiento — reps en vivo, series, enviar al iPhone
 │   └── Assets.xcassets
 └── HabitiumTests/                  # Unit tests de UseCases (con fakes)
 ```
@@ -358,6 +362,12 @@ controlar mis horas de pantalla". La respuesta honesta está aquí abajo.
 - Racha por hábito (`HabitRepository.streak(for:)`), no solo global.
 - Plantillas rápidas en `HabitTemplate.swift` para no partir de una hoja en
   blanco, incluida "Tiempo de pantalla" ya configurada.
+- `Habit.linkedToWorkouts`: un hábito Sí/No (por defecto, la plantilla
+  "Ejercicio") se puede marcar para que se complete solo en cuanto termina un
+  entrenamiento contado desde el Apple Watch — sin tocar el iPhone. Lo
+  resuelve `WorkoutRepository.save`, que llama a
+  `HabitRepository.markCompletedToday` (idempotente: dos entrenamientos el
+  mismo día no "des-completan" nada).
 
 **Por qué es manual y no automático**: iOS protege muy en serio los datos
 reales de Tiempo de Uso — leerlos o bloquear apps de verdad necesita el
@@ -372,7 +382,7 @@ otro hábito. Si algún día consigues ese permiso de Apple, el hueco para
 conectarlo de verdad ya está — solo faltaría que algo escriba en
 `HabitLog` automáticamente en vez de que lo hagas tú a mano.
 
-## Apple Watch (v1 — solo lectura)
+## Apple Watch
 
 Solo Apple Watch: "cualquier reloj digital" no es viable con Swift/SwiftUI —
 Garmin, Wear OS, etc. son sistemas operativos distintos, con SDKs propios;
@@ -381,10 +391,10 @@ sería un proyecto aparte por completo (igual que pasaba con Google Play).
 Lo que hay montado en `HabitiumWatch/` (target watchOS independiente,
 `project.yml`) y `SharedWatch/`:
 
-- Una pantalla única y glanceable: calorías restantes, próxima toma de
-  medicación, próximo evento, saldo disponible — el resumen de Inicio, pero
-  en la muñeca.
-- **Sincronización unidireccional iPhone → Watch** vía `WatchConnectivity`
+- Una pantalla glanceable: calorías restantes, próxima toma de medicación,
+  próximo evento, saldo disponible — el resumen de Inicio, pero en la
+  muñeca.
+- **Sincronización iPhone → Watch** (snapshots) vía `WatchConnectivity`
   (`SharedWatch/WatchConnectivityBridge.swift`), no App Groups — el iPhone y
   el Watch son dispositivos físicos distintos con almacenamiento separado,
   así que un App Group no comparte nada entre ellos por sí solo. Cada vez
@@ -392,12 +402,41 @@ Lo que hay montado en `HabitiumWatch/` (target watchOS independiente,
   los cuatro snapshots al reloj con `updateApplicationContext` ("el último
   gana", ideal para datos de un vistazo, no necesita que ninguna app esté
   en primer plano).
+- **Contador de repeticiones al entrenar** (`WorkoutView`, botón
+  "Entrenar" en la esquina de la pantalla del reloj):
+  1. `WorkoutSessionManager` abre una `HKWorkoutSession` real (HealthKit) —
+     no es ceremonia opcional: es lo que le da a la app acceso continuo en
+     segundo plano al acelerómetro mientras la pantalla del reloj está
+     apagada o la muñeca baja. Sin sesión activa, CoreMotion se suspende en
+     cuanto se apaga la pantalla.
+  2. `RepCounter` lee `CMDeviceMotion` a 50 Hz, suaviza la magnitud de la
+     aceleración con una media móvil exponencial y cuenta una repetición en
+     cada cruce ascendente del umbral, con un tiempo mínimo entre
+     repeticiones para no contar dos veces el mismo movimiento.
+  3. Al terminar, `WatchConnectivityBridge.sendLoggedWorkoutSets` envía las
+     series (`LoggedWorkoutSet`) al iPhone con `transferUserInfo` (a
+     diferencia de `updateApplicationContext`, esto se **encola** y llega
+     igual aunque el iPhone esté bloqueado o la app del reloj se cierre justo
+     después de "Finalizar"). El iPhone las recibe en
+     `WatchConnectivityBridge` (`didReceiveUserInfo`) y `WorkoutRepository`
+     las guarda como `WorkoutSet` — y completa automáticamente cualquier
+     hábito marcado como `linkedToWorkouts` (ver sección Hábitos).
+  - **Aviso honesto**: esto es detección de picos sobre la aceleración de la
+    muñeca, no el nivel de un sensor de barra dedicado (PUSH Band, Vitruve,
+    GymAware...) — no da velocidad ni potencia de la barra, solo un conteo
+    de repeticiones. Funciona bien en ejercicios donde la muñeca se mueve
+    con el peso (curl, press, remo); peor en los que la muñeca casi no se
+    mueve (sentadilla sin agarrar nada, prensa). Suficiente para registrar
+    "hoy entrené" sin comprar un sensor aparte — no es un instrumento de
+    laboratorio.
 
 **Qué falta a propósito (v2, más delicado):**
-- **Interactuar desde el reloj** (marcar una toma como hecha, completar una
-  tarea) — necesita sincronización en las dos direcciones, con manejo de
-  conflictos si ambos dispositivos cambian algo casi a la vez. Nada de eso
-  está montado todavía.
+- **Interactuar con medicación/tareas desde el reloj** (marcar una toma
+  como hecha, completar una tarea) — necesita sincronización en las dos
+  direcciones, con manejo de conflictos si ambos dispositivos cambian algo
+  casi a la vez. Nada de eso está montado todavía; el contador de
+  repeticiones es la primera pieza de escritura Watch → iPhone, no cubre el
+  resto.
 - **Complicación para la esfera del reloj** — necesitaría otro target
   (extensión de widgets para watchOS) encima del target de la app; lo dejé
   fuera de esta ronda para no arriesgar la configuración del target

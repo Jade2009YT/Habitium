@@ -50,7 +50,8 @@ final class PersistenceController {
             MedicationDoseLog.self,
             Habit.self,
             HabitLog.self,
-            UserSettings.self
+            UserSettings.self,
+            WorkoutSet.self
         ])
 
         let configuration: ModelConfiguration
@@ -121,7 +122,8 @@ final class PersistenceController {
             MedicationDoseLog.self,
             Habit.self,
             HabitLog.self,
-            UserSettings.self
+            UserSettings.self,
+            WorkoutSet.self
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory)
         do {

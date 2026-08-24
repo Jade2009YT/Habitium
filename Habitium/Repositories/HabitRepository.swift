@@ -42,13 +42,17 @@ struct HabitStatus: Identifiable, Equatable {
 @MainActor
 protocol HabitRepository {
     func habits() -> [Habit]
-    func addHabit(name: String, symbolName: String, kind: HabitKind, targetValue: Double?, goalDirection: HabitGoalDirection, unit: String?)
+    func addHabit(name: String, symbolName: String, kind: HabitKind, targetValue: Double?, goalDirection: HabitGoalDirection, unit: String?, linkedToWorkouts: Bool)
     func deleteHabit(_ habit: Habit)
     func setActive(_ habit: Habit, isActive: Bool)
 
     func todaysStatuses() -> [HabitStatus]
     func toggleCompleted(_ habit: Habit)
     func logValue(_ habit: Habit, value: Double)
+    /// Idempotent, non-toggling completion — used by WorkoutRepository to
+    /// auto-complete a linked habit when a Watch workout arrives, where
+    /// calling it twice in one day (e.g. two workouts) must not un-complete it.
+    func markCompletedToday(_ habit: Habit)
 }
 
 @MainActor
@@ -64,7 +68,7 @@ final class SwiftDataHabitRepository: HabitRepository {
         (try? context.fetch(FetchDescriptor<Habit>(sortBy: [SortDescriptor(\.sortOrder)]))) ?? []
     }
 
-    func addHabit(name: String, symbolName: String, kind: HabitKind, targetValue: Double?, goalDirection: HabitGoalDirection, unit: String?) {
+    func addHabit(name: String, symbolName: String, kind: HabitKind, targetValue: Double?, goalDirection: HabitGoalDirection, unit: String?, linkedToWorkouts: Bool = false) {
         let nextOrder = (habits().map(\.sortOrder).max() ?? -1) + 1
         let habit = Habit(
             name: name,
@@ -73,7 +77,8 @@ final class SwiftDataHabitRepository: HabitRepository {
             targetValue: targetValue,
             goalDirection: goalDirection,
             unit: unit,
-            sortOrder: nextOrder
+            sortOrder: nextOrder,
+            linkedToWorkouts: linkedToWorkouts
         )
         context.insert(habit)
         save()
@@ -122,6 +127,14 @@ final class SwiftDataHabitRepository: HabitRepository {
         let log = existingOrNewLog(for: habit, on: today)
         log.value = value
         log.isCompleted = true // a logged number counts as "done" for the day, goal met or not
+        save()
+    }
+
+    func markCompletedToday(_ habit: Habit) {
+        let today = Calendar.current.startOfDay(for: .now)
+        let log = existingOrNewLog(for: habit, on: today)
+        guard !log.isCompleted else { return } // already done today — no-op, not a toggle
+        log.isCompleted = true
         save()
     }
 

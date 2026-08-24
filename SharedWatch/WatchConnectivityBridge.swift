@@ -41,6 +41,13 @@ final class WatchConnectivityBridge: NSObject {
     /// directly.
     private(set) var latestPayload: WatchSyncPayload?
 
+    #if os(iOS)
+    /// Wired up by HabitiumApp at launch so incoming logged sets reach the
+    /// composition root (persist into SwiftData, refresh widgets, etc.)
+    /// without this shared file needing to know about WorkoutRepository.
+    var onWorkoutSetsReceived: (([LoggedWorkoutSet]) -> Void)?
+    #endif
+
     private var session: WCSession? {
         WCSession.isSupported() ? WCSession.default : nil
     }
@@ -77,6 +84,19 @@ final class WatchConnectivityBridge: NSObject {
         try? session.updateApplicationContext(["payload": data])
     }
     #endif
+
+    #if os(watchOS)
+    /// Sends the sets logged this workout to the iPhone. Uses
+    /// `transferUserInfo` rather than `sendMessage`/`updateApplicationContext`
+    /// on purpose: it's queued and delivered reliably even if the iPhone is
+    /// locked or the Watch app backgrounds right after "Finalizar" — losing
+    /// a just-finished set to a race would be worse than a short delay.
+    func sendLoggedWorkoutSets(_ sets: [LoggedWorkoutSet]) {
+        guard let session, !sets.isEmpty,
+              let data = try? JSONEncoder().encode(sets) else { return }
+        session.transferUserInfo(["loggedWorkoutSets": data])
+    }
+    #endif
 }
 
 extension WatchConnectivityBridge: WCSessionDelegate {
@@ -98,4 +118,17 @@ extension WatchConnectivityBridge: WCSessionDelegate {
             WatchConnectivityBridge.shared.latestPayload = payload
         }
     }
+
+    #if os(iOS)
+    /// Delivery for `sendLoggedWorkoutSets` (Watch -> iPhone). `transferUserInfo`
+    /// queues on the Watch side and replays this even if the iPhone app
+    /// wasn't running when "Finalizar" was tapped.
+    nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
+        guard let data = userInfo["loggedWorkoutSets"] as? Data,
+              let sets = try? JSONDecoder().decode([LoggedWorkoutSet].self, from: data) else { return }
+        Task { @MainActor in
+            WatchConnectivityBridge.shared.onWorkoutSetsReceived?(sets)
+        }
+    }
+    #endif
 }

@@ -2,10 +2,12 @@
 //  WatchSummaryView.swift
 //  HabitiumWatch
 //
-//  The whole v1 Watch app: a single glanceable screen mirroring the four
-//  HomeView cards on iPhone, fed by whatever WatchConnectivityBridge last
-//  synced. No interactions beyond looking — see README for what a
-//  read-write v2 (mark a dose taken from the wrist) would need.
+//  The main Watch screen: a glanceable summary mirroring four HomeView
+//  cards on iPhone, fed by whatever WatchConnectivityBridge last synced,
+//  plus a toolbar entry point into WorkoutView to start a rep-counted
+//  training session. Still read-only for the summary cards themselves —
+//  see README for what a read-write v2 (mark a dose taken from the
+//  wrist) would need.
 //
 
 import SwiftUI
@@ -40,6 +42,16 @@ struct WatchSummaryView: View {
                 }
             }
             .navigationTitle("Habitium")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        WorkoutView()
+                    } label: {
+                        Image(systemName: "figure.strengthtraining.traditional")
+                    }
+                    .tint(.purple)
+                }
+            }
         }
     }
 

@@ -15,6 +15,7 @@ struct AddHabitSheet: View {
     @State private var goalDirection: HabitGoalDirection = .atLeast
     @State private var targetText = ""
     @State private var unit = ""
+    @State private var linkedToWorkouts = false
 
     var body: some View {
         NavigationStack {
@@ -46,6 +47,12 @@ struct AddHabitSheet: View {
                             .keyboardType(.decimalPad)
                         TextField("Unidad (ej: h, vasos)", text: $unit)
                     }
+
+                    if kind == .checkbox {
+                        Toggle(isOn: $linkedToWorkouts) {
+                            Label("Marcar automáticamente al entrenar con el Watch", systemImage: "applewatch")
+                        }
+                    }
                 }
             }
             .navigationTitle("Nuevo hábito")
@@ -61,7 +68,8 @@ struct AddHabitSheet: View {
                             kind: kind,
                             targetValue: kind == .numeric ? Double(targetText.replacingOccurrences(of: ",", with: ".")) : nil,
                             goalDirection: goalDirection,
-                            unit: unit.isEmpty ? nil : unit
+                            unit: unit.isEmpty ? nil : unit,
+                            linkedToWorkouts: kind == .checkbox && linkedToWorkouts
                         )
                         dismiss()
                     }
@@ -78,5 +86,6 @@ struct AddHabitSheet: View {
         goalDirection = template.goalDirection
         targetText = template.targetValue.map { String(format: "%g", $0) } ?? ""
         unit = template.unit ?? ""
+        linkedToWorkouts = template.linkedToWorkouts
     }
 }

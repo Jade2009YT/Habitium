@@ -41,8 +41,8 @@ final class HabitsViewModel {
         refresh()
     }
 
-    func addHabit(name: String, symbolName: String, kind: HabitKind, targetValue: Double?, goalDirection: HabitGoalDirection, unit: String?) {
-        repository.addHabit(name: name, symbolName: symbolName, kind: kind, targetValue: targetValue, goalDirection: goalDirection, unit: unit)
+    func addHabit(name: String, symbolName: String, kind: HabitKind, targetValue: Double?, goalDirection: HabitGoalDirection, unit: String?, linkedToWorkouts: Bool = false) {
+        repository.addHabit(name: name, symbolName: symbolName, kind: kind, targetValue: targetValue, goalDirection: goalDirection, unit: unit, linkedToWorkouts: linkedToWorkouts)
         refresh()
     }
 

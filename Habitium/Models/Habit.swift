@@ -45,6 +45,11 @@ final class Habit {
     var isActive: Bool
     var sortOrder: Int
     var createdAt: Date
+    /// When true, finishing an Apple Watch workout (see WorkoutRepository)
+    /// automatically marks this habit done for today — no manual check-off
+    /// needed for something the Watch already knows happened. Only
+    /// meaningful for .checkbox habits (e.g. "Hacer ejercicio").
+    var linkedToWorkouts: Bool
 
     init(
         id: UUID = UUID(),
@@ -56,7 +61,8 @@ final class Habit {
         unit: String? = nil,
         isActive: Bool = true,
         sortOrder: Int = 0,
-        createdAt: Date = .now
+        createdAt: Date = .now,
+        linkedToWorkouts: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -68,6 +74,7 @@ final class Habit {
         self.isActive = isActive
         self.sortOrder = sortOrder
         self.createdAt = createdAt
+        self.linkedToWorkouts = linkedToWorkouts
     }
 }
 

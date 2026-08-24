@@ -34,6 +34,11 @@ struct HabitsView: View {
                             ForEach(viewModel.habits) { habit in
                                 HStack {
                                     Label(habit.name, systemImage: habit.symbolName)
+                                    if habit.linkedToWorkouts {
+                                        Image(systemName: "applewatch")
+                                            .font(.caption)
+                                            .foregroundStyle(.purple)
+                                    }
                                     Spacer()
                                     Toggle("", isOn: Binding(
                                         get: { habit.isActive },

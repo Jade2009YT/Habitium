@@ -154,6 +154,8 @@ targets:
       properties:
         com.apple.security.application-groups:
           - $(APP_GROUP_ID)
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
     info:
       path: HabitiumWatch/Info.plist
       properties:
@@ -163,6 +165,9 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         APP_GROUP_ID: $(APP_GROUP_ID)
+        NSHealthShareUsageDescription: "Habitium usa HealthKit para registrar tu sesión de entrenamiento mientras cuenta tus repeticiones."
+        NSHealthUpdateUsageDescription: "Habitium guarda tus entrenamientos en Salud para que queden en tu historial de actividad."
+        NSMotionUsageDescription: "Habitium usa el acelerómetro del Watch para contar tus repeticiones automáticamente."
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.habitium.app.watchkitapp

@@ -39,6 +39,9 @@ struct HabitiumApp: App {
                 .environment(lockManager)
                 .task {
                     NotificationScheduler.shared.requestAuthorizationIfNeeded()
+                    WatchConnectivityBridge.shared.onWorkoutSetsReceived = { sets in
+                        container.workoutRepository.save(sets)
+                    }
                     _ = WatchConnectivityBridge.shared // activates the WCSession so the Watch app gets synced
                     PendingActionProcessor.processPendingTaskCompletions(using: container.plannerRepository)
                     PendingActionProcessor.processPendingMedicationDoses(using: container.medicationRepository)
