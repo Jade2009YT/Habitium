@@ -48,6 +48,8 @@ final class PersistenceController {
             RecurringTransaction.self,
             Medication.self,
             MedicationDoseLog.self,
+            Habit.self,
+            HabitLog.self,
             UserSettings.self
         ])
 
@@ -117,6 +119,8 @@ final class PersistenceController {
             RecurringTransaction.self,
             Medication.self,
             MedicationDoseLog.self,
+            Habit.self,
+            HabitLog.self,
             UserSettings.self
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory)

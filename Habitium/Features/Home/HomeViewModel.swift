@@ -24,6 +24,7 @@ final class HomeViewModel {
     /// Planner tab.
     private(set) var focusTasks: [PlannerTask] = []
     private(set) var pendingMedicationDoses: [MedicationDose] = []
+    private(set) var habitStatuses: [HabitStatus] = []
 
     private let container: AppDependencyContainer
 
@@ -38,6 +39,7 @@ final class HomeViewModel {
         financeOverview = container.makeCalculateAvailableBudgetUseCase().execute()
         focusTasks = container.plannerRepository.focusTasks()
         pendingMedicationDoses = container.medicationRepository.todaysDoses().filter { $0.isPending }
+        habitStatuses = container.habitRepository.todaysStatuses()
     }
 
     func toggleFocusTask(_ task: PlannerTask) {

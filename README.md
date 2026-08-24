@@ -277,6 +277,7 @@ Habitium/
 │   │   ├── Planner/                  # Calendario, tareas, notas
 │   │   ├── Finance/                  # Ingresos/gastos, presupuesto
 │   │   ├── Medication/                # Recordatorios y tomas de medicación
+│   │   ├── Habits/                    # Hábitos diarios (incl. tiempo de pantalla manual)
 │   │   └── Settings/                 # Metas, cuenta, seguridad, IA, notificaciones, moneda
 │   └── Resources/Assets.xcassets
 ├── HabitiumWidgets/                # Extensión de WidgetKit (iOS)
@@ -343,6 +344,33 @@ Sección nueva (`Features/Medication/`, accesible desde la tarjeta
   notificaciones pero conserva el historial).
 - Tiene su propio widget con botón interactivo "marcar tomada" —
   mismo patrón que el de completar tareas.
+
+## Hábitos (incluye "tiempo de pantalla" manual)
+
+Sección nueva (`Features/Habits/`, tarjeta "Hábitos" en Inicio — mismo
+patrón, no es una pestaña nueva). Nació de una pregunta concreta: "quiero
+controlar mis horas de pantalla". La respuesta honesta está aquí abajo.
+
+- Cada `Habit` es tipo **Sí/No** (ejercicio, leer, meditar...) o
+  **numérico con objetivo** (tiempo de pantalla ≤ 3h, agua ≥ 8 vasos, dormir
+  ≥ 8h) — `HabitGoalDirection` decide si cumplir la meta es quedarte por
+  debajo o llegar como mínimo a un número.
+- Racha por hábito (`HabitRepository.streak(for:)`), no solo global.
+- Plantillas rápidas en `HabitTemplate.swift` para no partir de una hoja en
+  blanco, incluida "Tiempo de pantalla" ya configurada.
+
+**Por qué es manual y no automático**: iOS protege muy en serio los datos
+reales de Tiempo de Uso — leerlos o bloquear apps de verdad necesita el
+permiso restringido `Family Controls`
+(`FamilyControls`/`DeviceActivity`/`ManagedSettings`), que Apple tiene que
+**aprobar a mano** tras rellenar un formulario, y que normalmente exige la
+cuenta de pago de Apple Developer (99 $/año) para poder ni siquiera
+solicitarlo. No es algo que se resuelva con código en una sesión — por eso
+este módulo funciona hoy sin pedir ningún permiso especial: miras el número
+que ya te da Ajustes → Tiempo de Uso y lo registras aquí, como cualquier
+otro hábito. Si algún día consigues ese permiso de Apple, el hueco para
+conectarlo de verdad ya está — solo faltaría que algo escriba en
+`HabitLog` automáticamente en vez de que lo hagas tú a mano.
 
 ## Apple Watch (v1 — solo lectura)
 

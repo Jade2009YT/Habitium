@@ -22,6 +22,9 @@ struct HomeView: View {
                         if !viewModel.focusTasks.isEmpty {
                             focusCard(viewModel)
                         }
+                        if !viewModel.habitStatuses.isEmpty {
+                            habitsCard(viewModel)
+                        }
                         medicationCard(viewModel)
                         caloriesCard(viewModel)
                         upcomingCard(viewModel)
@@ -106,6 +109,44 @@ struct HomeView: View {
                             Text(dose.scheduledDate.formatted(date: .omitted, time: .shortened))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .cardStyle()
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func habitsCard(_ viewModel: HomeViewModel) -> some View {
+        let metCount = viewModel.habitStatuses.filter(\.isGoalMetToday).count
+        return NavigationLink {
+            HabitsView()
+        } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Label("Hábitos", systemImage: "repeat.circle.fill")
+                        .font(.headline)
+                        .foregroundStyle(.teal)
+                    Spacer()
+                    Text("\(metCount)/\(viewModel.habitStatuses.count) hoy")
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                }
+                // Read-only preview, same reason as the medication card:
+                // a nested interactive control here wouldn't get its own
+                // taps inside a NavigationLink label.
+                ForEach(viewModel.habitStatuses.prefix(4)) { status in
+                    HStack {
+                        Image(systemName: status.isGoalMetToday ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(status.isGoalMetToday ? .teal : .secondary)
+                        Text(status.name).font(.subheadline)
+                        Spacer()
+                        if status.streak > 0 {
+                            Label("\(status.streak)", systemImage: "flame.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
                         }
                     }
                 }
