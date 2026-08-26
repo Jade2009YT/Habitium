@@ -61,6 +61,8 @@ final class Transaction {
     var category: TransactionCategory.RawValue
     var note: String?
     var date: Date
+    /// See FoodEntry.updatedAt — same purpose, for CloudSyncService.
+    var updatedAt: Date
 
     init(
         id: UUID = UUID(),
@@ -68,7 +70,8 @@ final class Transaction {
         type: TransactionType,
         category: TransactionCategory,
         note: String? = nil,
-        date: Date = .now
+        date: Date = .now,
+        updatedAt: Date = .now
     ) {
         self.id = id
         self.amount = amount
@@ -76,6 +79,7 @@ final class Transaction {
         self.category = category.rawValue
         self.note = note
         self.date = date
+        self.updatedAt = updatedAt
     }
 
     /// Signed amount: positive for income, negative for expense — convenient

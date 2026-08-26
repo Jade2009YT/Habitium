@@ -65,6 +65,11 @@ final class FoodEntry {
     /// Which AI provider produced this analysis, if any ("openai", "claude").
     var analyzedBy: String?
 
+    /// Bumped on every write — used by CloudSyncService to decide, when
+    /// the same id exists both locally and in Supabase, which copy wins
+    /// ("gana el más reciente"). Not shown anywhere in the UI.
+    var updatedAt: Date
+
     init(
         id: UUID = UUID(),
         name: String,
@@ -77,7 +82,8 @@ final class FoodEntry {
         fatGrams: Double = 0,
         imageData: Data? = nil,
         notes: String? = nil,
-        analyzedBy: String? = nil
+        analyzedBy: String? = nil,
+        updatedAt: Date = .now
     ) {
         self.id = id
         self.name = name
@@ -91,6 +97,7 @@ final class FoodEntry {
         self.imageData = imageData
         self.notes = notes
         self.analyzedBy = analyzedBy
+        self.updatedAt = updatedAt
     }
 
     var macros: Macronutrients {

@@ -50,6 +50,8 @@ final class Habit {
     /// needed for something the Watch already knows happened. Only
     /// meaningful for .checkbox habits (e.g. "Hacer ejercicio").
     var linkedToWorkouts: Bool
+    /// See FoodEntry.updatedAt — same purpose, for CloudSyncService.
+    var updatedAt: Date
 
     init(
         id: UUID = UUID(),
@@ -62,7 +64,8 @@ final class Habit {
         isActive: Bool = true,
         sortOrder: Int = 0,
         createdAt: Date = .now,
-        linkedToWorkouts: Bool = false
+        linkedToWorkouts: Bool = false,
+        updatedAt: Date = .now
     ) {
         self.id = id
         self.name = name
@@ -75,6 +78,7 @@ final class Habit {
         self.sortOrder = sortOrder
         self.createdAt = createdAt
         self.linkedToWorkouts = linkedToWorkouts
+        self.updatedAt = updatedAt
     }
 }
 
@@ -87,12 +91,15 @@ final class HabitLog {
     var date: Date
     var isCompleted: Bool
     var value: Double?
+    /// See FoodEntry.updatedAt — same purpose, for CloudSyncService.
+    var updatedAt: Date
 
-    init(id: UUID = UUID(), habitID: UUID, date: Date, isCompleted: Bool = false, value: Double? = nil) {
+    init(id: UUID = UUID(), habitID: UUID, date: Date, isCompleted: Bool = false, value: Double? = nil, updatedAt: Date = .now) {
         self.id = id
         self.habitID = habitID
         self.date = date
         self.isCompleted = isCompleted
         self.value = value
+        self.updatedAt = updatedAt
     }
 }

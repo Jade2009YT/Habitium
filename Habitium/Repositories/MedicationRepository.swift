@@ -74,6 +74,10 @@ final class SwiftDataMedicationRepository: MedicationRepository {
 
     func deleteMedication(_ medication: Medication) {
         NotificationScheduler.shared.cancelReminders(identifiers: medication.notificationIdentifiers)
+        // Cloud-side dose logs cascade-delete with the medication (see
+        // supabase/schema.sql's "on delete cascade") — no separate
+        // tombstone needed for those.
+        context.insert(PendingCloudDeletion(table: "medications", recordID: medication.id))
         context.delete(medication)
         save()
         syncWidgetSnapshot()
@@ -91,6 +95,7 @@ final class SwiftDataMedicationRepository: MedicationRepository {
             )
             medication.notificationIdentifiers = identifiers
         }
+        medication.updatedAt = .now
         save()
         syncWidgetSnapshot()
     }
@@ -157,6 +162,7 @@ final class SwiftDataMedicationRepository: MedicationRepository {
         let log = existing ?? MedicationDoseLog(medicationID: dose.medicationID, date: today, minuteOfDay: dose.minuteOfDay)
         if existing == nil { context.insert(log) }
         mutate(log)
+        log.updatedAt = .now
         save()
     }
 

@@ -16,10 +16,13 @@ final class WeightEntry {
     var id: UUID
     var date: Date
     var weightKg: Double
+    /// See FoodEntry.updatedAt — same purpose, for CloudSyncService.
+    var updatedAt: Date
 
-    init(id: UUID = UUID(), date: Date = .now, weightKg: Double) {
+    init(id: UUID = UUID(), date: Date = .now, weightKg: Double, updatedAt: Date = .now) {
         self.id = id
         self.date = date
         self.weightKg = weightKg
+        self.updatedAt = updatedAt
     }
 }

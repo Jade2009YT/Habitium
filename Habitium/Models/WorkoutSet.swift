@@ -18,11 +18,14 @@ final class WorkoutSet {
     var exerciseName: String
     var reps: Int
     var date: Date
+    /// See FoodEntry.updatedAt — same purpose, for CloudSyncService.
+    var updatedAt: Date
 
-    init(id: UUID = UUID(), exerciseName: String, reps: Int, date: Date) {
+    init(id: UUID = UUID(), exerciseName: String, reps: Int, date: Date, updatedAt: Date = .now) {
         self.id = id
         self.exerciseName = exerciseName
         self.reps = reps
         self.date = date
+        self.updatedAt = updatedAt
     }
 }

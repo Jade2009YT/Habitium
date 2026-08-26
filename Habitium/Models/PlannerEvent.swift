@@ -22,6 +22,8 @@ final class PlannerEvent {
     var hasReminder: Bool
     var notificationIdentifier: String?
     var createdAt: Date
+    /// See FoodEntry.updatedAt — same purpose, for CloudSyncService.
+    var updatedAt: Date
 
     init(
         id: UUID = UUID(),
@@ -33,7 +35,8 @@ final class PlannerEvent {
         isAllDay: Bool = false,
         hasReminder: Bool = true,
         notificationIdentifier: String? = nil,
-        createdAt: Date = .now
+        createdAt: Date = .now,
+        updatedAt: Date = .now
     ) {
         self.id = id
         self.title = title
@@ -45,5 +48,6 @@ final class PlannerEvent {
         self.hasReminder = hasReminder
         self.notificationIdentifier = notificationIdentifier
         self.createdAt = createdAt
+        self.updatedAt = updatedAt
     }
 }

@@ -85,12 +85,17 @@ final class SwiftDataHabitRepository: HabitRepository {
     }
 
     func deleteHabit(_ habit: Habit) {
+        // Cloud-side habit_logs cascade-delete with the habit (see
+        // supabase/schema.sql's "on delete cascade") — no separate
+        // tombstone needed for those.
+        context.insert(PendingCloudDeletion(table: "habits", recordID: habit.id))
         context.delete(habit)
         save()
     }
 
     func setActive(_ habit: Habit, isActive: Bool) {
         habit.isActive = isActive
+        habit.updatedAt = .now
         save()
     }
 
@@ -119,6 +124,7 @@ final class SwiftDataHabitRepository: HabitRepository {
         let today = Calendar.current.startOfDay(for: .now)
         let log = existingOrNewLog(for: habit, on: today)
         log.isCompleted.toggle()
+        log.updatedAt = .now
         save()
     }
 
@@ -127,6 +133,7 @@ final class SwiftDataHabitRepository: HabitRepository {
         let log = existingOrNewLog(for: habit, on: today)
         log.value = value
         log.isCompleted = true // a logged number counts as "done" for the day, goal met or not
+        log.updatedAt = .now
         save()
     }
 
@@ -135,6 +142,7 @@ final class SwiftDataHabitRepository: HabitRepository {
         let log = existingOrNewLog(for: habit, on: today)
         guard !log.isCompleted else { return } // already done today — no-op, not a toggle
         log.isCompleted = true
+        log.updatedAt = .now
         save()
     }
 

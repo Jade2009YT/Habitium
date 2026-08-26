@@ -27,6 +27,8 @@ final class Medication {
     /// repository cancel/reschedule them precisely when edited.
     var notificationIdentifiers: [String]
     var createdAt: Date
+    /// See FoodEntry.updatedAt — same purpose, for CloudSyncService.
+    var updatedAt: Date
 
     init(
         id: UUID = UUID(),
@@ -36,7 +38,8 @@ final class Medication {
         reminderMinutesSinceMidnight: [Int] = [],
         isActive: Bool = true,
         notificationIdentifiers: [String] = [],
-        createdAt: Date = .now
+        createdAt: Date = .now,
+        updatedAt: Date = .now
     ) {
         self.id = id
         self.name = name
@@ -46,6 +49,7 @@ final class Medication {
         self.isActive = isActive
         self.notificationIdentifiers = notificationIdentifiers
         self.createdAt = createdAt
+        self.updatedAt = updatedAt
     }
 }
 
@@ -61,6 +65,8 @@ final class MedicationDoseLog {
     var minuteOfDay: Int
     var takenAt: Date?
     var skipped: Bool
+    /// See FoodEntry.updatedAt — same purpose, for CloudSyncService.
+    var updatedAt: Date
 
     init(
         id: UUID = UUID(),
@@ -68,7 +74,8 @@ final class MedicationDoseLog {
         date: Date,
         minuteOfDay: Int,
         takenAt: Date? = nil,
-        skipped: Bool = false
+        skipped: Bool = false,
+        updatedAt: Date = .now
     ) {
         self.id = id
         self.medicationID = medicationID
@@ -76,5 +83,6 @@ final class MedicationDoseLog {
         self.minuteOfDay = minuteOfDay
         self.takenAt = takenAt
         self.skipped = skipped
+        self.updatedAt = updatedAt
     }
 }

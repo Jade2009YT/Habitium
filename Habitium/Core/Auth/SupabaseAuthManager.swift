@@ -3,11 +3,16 @@
 //  Habitium
 //
 //  Email/password registration + login via Supabase Auth — a second way
-//  in, alongside Sign in with Apple (LoginView offers both). Deliberately
-//  identity-only: creating an account here does NOT move any app data to
-//  the cloud. Everything (meals, medication, finances, notes) still lives
-//  exclusively in the local SwiftData store, exactly as before. Supabase
-//  only ever sees an email address and a hashed password.
+//  in, alongside Sign in with Apple (LoginView offers both).
+//
+//  Fase 2 update: signing in here is no longer identity-only. Once
+//  signed in, CloudSyncService (Core/Sync/) mirrors this account's data
+//  to the same Supabase project's Postgres tables (see
+//  supabase/schema.sql), so it's reachable from any device/platform
+//  signed into the same account — iPhone, and eventually Android/web.
+//  SwiftData on this device stays the fast local read/write path and
+//  keeps its own encryption (Secure Enclave, Data Protection); the cloud
+//  copy is what makes "the same data everywhere" possible.
 //
 //  Setup: create a free project at https://supabase.com, then paste its
 //  URL + anon key into Configuration/Secrets.xcconfig (see
@@ -54,7 +59,11 @@ final class SupabaseAuthManager {
     var isConfigured: Bool { client != nil }
     var isSignedIn: Bool { if case .signedIn = state { return true } else { return false } }
 
-    private let client: SupabaseClient?
+    /// Not private: CloudSyncService reuses this exact instance (not a
+    /// second SupabaseClient) so every Postgrest request it makes
+    /// automatically carries the signed-in session's token, the same way
+    /// client.auth already does internally.
+    let client: SupabaseClient?
 
     init() {
         if let url = AppConfiguration.supabaseURL, let key = AppConfiguration.supabaseAnonKey {

@@ -74,6 +74,7 @@ final class SwiftDataFinanceRepository: FinanceRepository {
     }
 
     func deleteTransaction(_ transaction: Transaction) {
+        context.insert(PendingCloudDeletion(table: "transactions", recordID: transaction.id))
         context.delete(transaction)
         save()
         syncWidgetSnapshot()
@@ -133,6 +134,7 @@ final class SwiftDataFinanceRepository: FinanceRepository {
     func setCategoryBudget(_ category: TransactionCategory, monthlyLimit: Double) {
         if let existing = categoryBudgets().first(where: { $0.category == category.rawValue }) {
             existing.monthlyLimit = monthlyLimit
+            existing.updatedAt = .now
         } else {
             context.insert(CategoryBudget(category: category, monthlyLimit: monthlyLimit))
         }
@@ -141,6 +143,7 @@ final class SwiftDataFinanceRepository: FinanceRepository {
 
     func removeCategoryBudget(_ category: TransactionCategory) {
         if let existing = categoryBudgets().first(where: { $0.category == category.rawValue }) {
+            context.insert(PendingCloudDeletion(table: "category_budgets", recordID: existing.id))
             context.delete(existing)
             save()
         }
@@ -156,12 +159,14 @@ final class SwiftDataFinanceRepository: FinanceRepository {
     }
 
     func deleteRecurringTransaction(_ transaction: RecurringTransaction) {
+        context.insert(PendingCloudDeletion(table: "recurring_transactions", recordID: transaction.id))
         context.delete(transaction)
         save()
     }
 
     func setRecurringTransactionActive(_ transaction: RecurringTransaction, isActive: Bool) {
         transaction.isActive = isActive
+        transaction.updatedAt = .now
         save()
     }
 
@@ -182,6 +187,7 @@ final class SwiftDataFinanceRepository: FinanceRepository {
             let transaction = Transaction(amount: recurring.amount, type: type, category: category, note: recurring.name)
             context.insert(transaction)
             recurring.lastAppliedMonth = currentMonthStart
+            recurring.updatedAt = .now
             appliedCount += 1
         }
         if appliedCount > 0 {

@@ -1,24 +1,32 @@
 # Habitium
 
-Aplicación nativa para iOS enfocada en el cuidado personal integral: nutrición
-(con IA), calendario/recordatorios, y finanzas personales — todo en un
-dashboard unificado, con soporte para Widgets de iOS. Pensada para uso
-personal y 100% local (sin backend, sin sincronización en la nube), pero con
-una arquitectura limpia y modular que permite publicarla en la App Store más
-adelante.
+Aplicación nativa para iOS/watchOS enfocada en el cuidado personal integral:
+nutrición (con IA), calendario/recordatorios, medicación, hábitos,
+entrenamientos y finanzas personales — todo en un dashboard unificado, con
+soporte para Widgets de iOS y una app de Apple Watch. Empezó pensada para uso
+personal 100% local; desde la **Fase 2** (ver más abajo), cada cuenta
+registrada con email también sincroniza sus datos por Supabase, para que sean
+los mismos en cualquier dispositivo — con una arquitectura limpia y modular
+pensada desde el principio para poder publicarla más adelante.
 
 ## Stack
 
-- **UI**: Swift + SwiftUI
+- **UI**: Swift + SwiftUI (iOS), SwiftUI (watchOS)
 - **Arquitectura**: MVVM + Clean Architecture (Models → Repositories →
   UseCases → ViewModels → Views)
-- **Persistencia**: SwiftData, 100% local, almacenado en un contenedor de
-  App Group para que la app y los widgets compartan datos
-- **Widgets**: WidgetKit, con 3 widgets (nutrición, finanzas, calendario)
-  interactivos vía App Intents, para pantalla de inicio y pantalla de bloqueo
+- **Persistencia**: SwiftData en el dispositivo (rápida, funciona offline,
+  cifrada — ver "Seguridad y privacidad" más abajo), almacenada en un
+  contenedor de App Group para que la app y los widgets compartan datos.
+  Desde la Fase 2, `CloudSyncService` la mantiene en línea con Supabase
+  Postgres para las cuentas de email — ver la sección dedicada.
+- **Widgets**: WidgetKit, con 4 widgets (nutrición, finanzas, calendario,
+  medicación) interactivos vía App Intents, para pantalla de inicio y
+  pantalla de bloqueo
 - **IA**: OpenAI (GPT-4o Vision) o Claude (Anthropic), seleccionable por el
   usuario, para analizar fotos/texto de comidas
-- **Login**: Sign in with Apple — sin backend, sin contraseñas que proteger
+- **Login**: Sign in with Apple (identidad únicamente local) o email +
+  contraseña vía Supabase Auth (identidad + sincronización en la nube) — el
+  usuario elige cualquiera de los dos, o ambos
 - **Notificaciones**: `UserNotifications` local (sin push remoto)
 - **Generación del proyecto Xcode**: [XcodeGen](https://github.com/yonaskolb/XcodeGen)
   a partir de `project.yml` — el `.xcodeproj` no se versiona (ver `.gitignore`)
@@ -122,11 +130,15 @@ desarrollador conectada para firmarlo.
 
 ### Registro con email y contraseña (Supabase Auth)
 
-Para quien prefiera crear una cuenta clásica en vez de usar su Apple ID.
-**Importante: la cuenta es solo identidad — tus datos (comidas, medicación,
-finanzas, notas) siguen guardándose exclusivamente en tu iPhone.** Supabase
-nunca ve nada de eso, solo tu email y tu contraseña (con hash, nunca en
-texto plano — así es como funciona cualquier sistema de autenticación serio).
+Para quien prefiera crear una cuenta clásica en vez de usar su Apple ID —
+y, desde la Fase 2, la que hace falta para que los datos te funcionen igual
+en varios dispositivos (ver esa sección más abajo). Supabase solo ve tu
+email y tu contraseña (con hash, nunca en texto plano); el resto de tus
+datos (comidas, medicación, finanzas, notas) sí viajan a Supabase Postgres
+ahora, pero cifrados en tránsito (HTTPS) y aislados por cuenta con Row Level
+Security — nadie más los puede leer, ni siquiera con la `anon key` pública
+de la app. Si entras solo con Sign in with Apple (sin cuenta de email),
+nada de esto aplica: sigue siendo 100% local, como al principio.
 
 Puesta en marcha:
 
@@ -450,6 +462,73 @@ mismo para comprobarlo). Si `xcodegen generate` o Xcode se quejan de
 (**File → New → Target → watchOS → App**), y apunta sus fuentes a
 `HabitiumWatch/` y `SharedWatch/`.
 
+## Fase 2 — multidispositivo (Supabase como origen de verdad)
+
+Origen: un amigo con Android quería usar Habitium con frecuencia, y el iPad
+del cole solo permite páginas web — para que a los dos les funcione con
+**su propia cuenta y sus propios datos**, hacía falta dejar de guardar todo
+solo en el iPhone. Esto es el cambio de arquitectura para conseguirlo.
+
+**Qué cambió exactamente**: hasta ahora, crear una cuenta por email
+(`SupabaseAuthManager`) era solo identidad — ningún dato viajaba. Desde esta
+ronda, sí viaja: `Core/Sync/CloudSyncService.swift` mantiene sincronizados
+SwiftData (en el dispositivo) y las tablas de Supabase Postgres
+(`supabase/schema.sql`) para cualquier cuenta que haya iniciado sesión por
+email/contraseña.
+
+- **Solo cuentas de email, no Sign in with Apple**: Apple no crea una sesión
+  de Supabase, así que no hay un `auth.uid()` al que Postgres pueda atar tus
+  filas. Si entras solo con Apple, Habitium sigue funcionando exactamente
+  como antes — 100% local, nada sale del dispositivo. La sincronización es
+  un añadido para quien elige la cuenta de email, no algo que le pasó a todo
+  el mundo sin avisar.
+- **Cuándo sincroniza**: al abrir la app, al volver a primer plano, y justo
+  después de iniciar sesión — no en cada pulsación. `CloudSyncService.syncAll`
+  hace un reconcile completo (baja todo lo del usuario, sube todo lo local)
+  en vez de subir solo lo que cambió; a la escala de una persona (o dos) es
+  barato y, sobre todo, mucho más fácil de tener bien sin compilador que
+  llevar la cuenta de qué fila concreta cambió.
+- **Quién gana un conflicto**: cada tabla tiene `updated_at`, puesto siempre
+  por el dispositivo que hizo el cambio real (cada método de cada
+  repositorio que muta algo lo actualiza) — nunca por el servidor. Al
+  fusionar, gana la copia con `updated_at` más nuevo. Ver
+  `supabase/README.md` para el porqué de que sea el cliente y no un trigger.
+- **Los borrados sí se propagan**: cada `deleteX` de cada repositorio
+  también inserta un `PendingCloudDeletion` (una "tumba") en el mismo
+  `save()` que el borrado real — `CloudSyncService` las vacía al principio
+  de cada sincronización, antes de bajar nada, para que un elemento borrado
+  no reaparezca "como si fuera nuevo" en la siguiente sincronización.
+- **Qué NO sincroniza a propósito**: las fotos de las comidas, los
+  identificadores de notificaciones locales, y las claves de IA — ver
+  `supabase/README.md` para el detalle de cada una.
+
+Archivos nuevos de esta ronda:
+
+- `supabase/schema.sql` + `supabase/README.md` — el esquema de Postgres
+  (16 tablas, Row Level Security por `user_id`) y cómo aplicarlo.
+- `Core/Sync/CloudSyncDTOs.swift` — un `Codable` por tabla, con
+  `CodingKeys` explícitas a snake_case.
+- `Core/Sync/CloudSyncTransport.swift` — la única capa que habla con
+  Postgrest de verdad (upsert/fetch/delete), con fallos silenciosos
+  (offline no debe romper nada; los datos reales siguen en SwiftData).
+- `Core/Sync/CloudSyncService.swift` — el reconcile en sí, tabla por tabla.
+- `Models/PendingCloudDeletion.swift` — las tumbas para propagar borrados.
+- Todos los `@Model` ganaron un campo `updatedAt` que antes no tenían
+  (los que ya llevaban uno, como `PlannerNote`, `NutritionGoal` o
+  `BudgetSettings`, se quedaron igual).
+
+**Aviso honesto**: igual que con supabase-swift y el target de watchOS, esto
+está escrito contra el patrón documentado de `PostgrestClient` en
+supabase-swift v2 (`.from(tabla).select()/.upsert()/.delete()/.eq()/.execute()`)
+sin poder compilarlo yo mismo. Si Xcode se queja de algún nombre de método,
+lo más probable es que sea un cambio de nombre casi idéntico — la
+arquitectura de estos archivos no debería necesitar cambiar por eso.
+
+**Qué falta a propósito**: la app de Android que motivó este cambio (ver
+"Android" más abajo) — este apartado es solo la base de datos compartida que
+Android también usará. El iPad del cole se resuelve con una futura app web,
+que reutiliza exactamente estas mismas tablas.
+
 ## Lo mejor de las apps mejor valoradas, adaptado a Habitium
 
 Antes de esta ronda, investigué qué hace tan queridas a la app de nutrición,
@@ -478,8 +557,8 @@ Segunda ronda — el resto del backlog, ya cerrado:
 
 - Notificaciones inteligentes basadas en patrones de uso.
 - Compartir/exportar reportes (PDF o imagen) del resumen mensual.
-- Sincronización opcional entre dispositivos propios (seguiría siendo
-  100% tuyo, sin backend de terceros) — hoy cada instalación es independiente.
+- ~~Sincronización opcional entre dispositivos propios~~ — hecho en la Fase 2
+  (ver esa sección), aunque solo para cuentas de email, no Sign in with Apple.
 
 ## Otros próximos pasos sugeridos
 

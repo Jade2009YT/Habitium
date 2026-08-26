@@ -81,6 +81,7 @@ final class SwiftDataNutritionRepository: NutritionRepository {
     }
 
     func deleteEntry(_ entry: FoodEntry) {
+        context.insert(PendingCloudDeletion(table: "food_entries", recordID: entry.id))
         context.delete(entry)
         save()
         syncWidgetSnapshot()

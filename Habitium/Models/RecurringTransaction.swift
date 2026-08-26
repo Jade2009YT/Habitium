@@ -26,6 +26,8 @@ final class RecurringTransaction {
     /// once per month even if the app opens multiple times that day.
     var lastAppliedMonth: Date?
     var createdAt: Date
+    /// See FoodEntry.updatedAt — same purpose, for CloudSyncService.
+    var updatedAt: Date
 
     init(
         id: UUID = UUID(),
@@ -36,7 +38,8 @@ final class RecurringTransaction {
         dayOfMonth: Int,
         isActive: Bool = true,
         lastAppliedMonth: Date? = nil,
-        createdAt: Date = .now
+        createdAt: Date = .now,
+        updatedAt: Date = .now
     ) {
         self.id = id
         self.name = name
@@ -47,5 +50,6 @@ final class RecurringTransaction {
         self.isActive = isActive
         self.lastAppliedMonth = lastAppliedMonth
         self.createdAt = createdAt
+        self.updatedAt = updatedAt
     }
 }

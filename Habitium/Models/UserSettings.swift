@@ -38,6 +38,8 @@ final class UserSettings {
     /// used as a secret.
     var displayName: String?
     var email: String?
+    /// See FoodEntry.updatedAt — same purpose, for CloudSyncService.
+    var updatedAt: Date
 
     init(
         id: UUID = UUID(),
@@ -45,7 +47,8 @@ final class UserSettings {
         mealReminderNotificationsEnabled: Bool = true,
         eventNotificationsEnabled: Bool = true,
         displayName: String? = nil,
-        email: String? = nil
+        email: String? = nil,
+        updatedAt: Date = .now
     ) {
         self.id = id
         self.preferredAIProvider = preferredAIProvider.rawValue
@@ -53,5 +56,6 @@ final class UserSettings {
         self.eventNotificationsEnabled = eventNotificationsEnabled
         self.displayName = displayName
         self.email = email
+        self.updatedAt = updatedAt
     }
 }

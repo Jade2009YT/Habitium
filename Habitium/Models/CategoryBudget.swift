@@ -17,10 +17,13 @@ final class CategoryBudget {
     var id: UUID
     var category: TransactionCategory.RawValue
     var monthlyLimit: Double
+    /// See FoodEntry.updatedAt — same purpose, for CloudSyncService.
+    var updatedAt: Date
 
-    init(id: UUID = UUID(), category: TransactionCategory, monthlyLimit: Double) {
+    init(id: UUID = UUID(), category: TransactionCategory, monthlyLimit: Double, updatedAt: Date = .now) {
         self.id = id
         self.category = category.rawValue
         self.monthlyLimit = monthlyLimit
+        self.updatedAt = updatedAt
     }
 }

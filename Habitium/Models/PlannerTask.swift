@@ -52,6 +52,8 @@ final class PlannerTask {
     /// intentional daily planning. The repository caps this at 3 tasks at
     /// a time (see PlannerRepository.toggleFocus).
     var isFocus: Bool
+    /// See FoodEntry.updatedAt — same purpose, for CloudSyncService.
+    var updatedAt: Date
 
     init(
         id: UUID = UUID(),
@@ -63,7 +65,8 @@ final class PlannerTask {
         priority: TaskPriority = .medium,
         createdAt: Date = .now,
         notificationIdentifier: String? = nil,
-        isFocus: Bool = false
+        isFocus: Bool = false,
+        updatedAt: Date = .now
     ) {
         self.id = id
         self.title = title
@@ -75,5 +78,6 @@ final class PlannerTask {
         self.createdAt = createdAt
         self.notificationIdentifier = notificationIdentifier
         self.isFocus = isFocus
+        self.updatedAt = updatedAt
     }
 }

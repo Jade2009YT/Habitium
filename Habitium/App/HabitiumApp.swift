@@ -42,6 +42,12 @@ struct HabitiumApp: App {
                     WatchConnectivityBridge.shared.onWorkoutSetsReceived = { sets in
                         container.workoutRepository.save(sets)
                     }
+                    // Reuses emailAuth's own SupabaseClient — see
+                    // CloudSyncService's doc comment on why. The first
+                    // actual sync pass runs from RootView, right after
+                    // emailAuth.restoreSession() confirms whether there's
+                    // a signed-in account to sync at all.
+                    CloudSyncService.shared.authManager = emailAuth
                     _ = WatchConnectivityBridge.shared // activates the WCSession so the Watch app gets synced
                     PendingActionProcessor.processPendingTaskCompletions(using: container.plannerRepository)
                     PendingActionProcessor.processPendingMedicationDoses(using: container.medicationRepository)
@@ -59,6 +65,9 @@ struct HabitiumApp: App {
                 container.financeRepository.applyDueRecurringTransactions()
                 deepLinkCoordinator.checkForPendingLink()
                 lockManager.lockIfNeeded()
+                // No-op if not signed in via Supabase (see CloudSyncService's
+                // Apple-only disclaimer) or already mid-sync.
+                Task { await CloudSyncService.shared.syncAll(context: persistence.container.mainContext) }
             case .background:
                 lockManager.lockOnBackground()
             default:

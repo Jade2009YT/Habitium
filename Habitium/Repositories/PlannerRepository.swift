@@ -78,6 +78,7 @@ final class SwiftDataPlannerRepository: PlannerRepository {
 
     func toggleComplete(_ task: PlannerTask) {
         task.isCompleted.toggle()
+        task.updatedAt = .now
         if task.isCompleted {
             NotificationScheduler.shared.cancelReminder(identifier: task.notificationIdentifier)
         }
@@ -87,6 +88,7 @@ final class SwiftDataPlannerRepository: PlannerRepository {
 
     func deleteTask(_ task: PlannerTask) {
         NotificationScheduler.shared.cancelReminder(identifier: task.notificationIdentifier)
+        context.insert(PendingCloudDeletion(table: "planner_tasks", recordID: task.id))
         context.delete(task)
         save()
         syncWidgetSnapshot()
@@ -106,6 +108,7 @@ final class SwiftDataPlannerRepository: PlannerRepository {
             return false
         }
         task.isFocus.toggle()
+        task.updatedAt = .now
         save()
         return true
     }
@@ -135,6 +138,7 @@ final class SwiftDataPlannerRepository: PlannerRepository {
 
     func deleteEvent(_ event: PlannerEvent) {
         NotificationScheduler.shared.cancelReminder(identifier: event.notificationIdentifier)
+        context.insert(PendingCloudDeletion(table: "planner_events", recordID: event.id))
         context.delete(event)
         save()
         syncWidgetSnapshot()
