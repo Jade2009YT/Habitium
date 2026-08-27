@@ -22,7 +22,10 @@ final class PlannerViewModel {
 
     private(set) var tasksForDay: [PlannerTask] = []
     private(set) var eventsForDay: [PlannerEvent] = []
-    private(set) var noteText: String = ""
+    /// Not private(set): DayDetailView binds to this two-way (Bindable) so
+    /// typing in the TextField writes straight into it — saveNote() then
+    /// just persists whatever's currently here.
+    var noteText: String = ""
     /// Start-of-day dates within the visible month that have at least one
     /// task or event, used to draw a dot under those days.
     private(set) var daysWithItems: Set<Date> = []

@@ -60,11 +60,11 @@ final class SwiftDataPlannerRepository: PlannerRepository {
         var descriptor = FetchDescriptor<PlannerTask>(sortBy: [SortDescriptor(\.dueDate)])
         if let date {
             let range = Calendar.current.dayRange(containing: date)
+            // #Predicate's body must be a single expression — no if/return,
+            // hence the optional-chaining-into-a-Bool form instead of the
+            // more readable `if let due = task.dueDate { ... }` version.
             descriptor.predicate = #Predicate<PlannerTask> { task in
-                if let due = task.dueDate {
-                    return due >= range.lowerBound && due < range.upperBound
-                }
-                return false
+                task.dueDate != nil && task.dueDate! >= range.lowerBound && task.dueDate! < range.upperBound
             }
         }
         return (try? context.fetch(descriptor)) ?? []

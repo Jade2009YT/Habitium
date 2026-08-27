@@ -18,18 +18,20 @@ struct CategoryBudgetsSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                ForEach(TransactionCategory.allCases.filter { $0 != .salary }) { category in
-                    HStack {
-                        Label(category.displayName, systemImage: category.symbolName)
-                        Spacer()
-                        TextField("Sin límite", text: binding(for: category))
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 90)
+                Section {
+                    ForEach(TransactionCategory.allCases.filter { $0 != .salary }) { category in
+                        HStack {
+                            Label(category.displayName, systemImage: category.symbolName)
+                            Spacer()
+                            TextField("Sin límite", text: binding(for: category))
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 90)
+                        }
                     }
+                } footer: {
+                    Text("Deja el campo vacío para no poner límite a esa categoría.")
                 }
-            } footer: {
-                Text("Deja el campo vacío para no poner límite a esa categoría.")
             }
             .navigationTitle("Presupuesto por categoría")
             .toolbar {

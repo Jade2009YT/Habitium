@@ -53,7 +53,12 @@ final class SubscriptionManager {
     var monthlyProduct: Product? { products.first { $0.id == HabitiumProduct.proMonthly } }
     var lifetimeProduct: Product? { products.first { $0.id == HabitiumProduct.lifetime } }
 
-    private var updatesTask: Task<Void, Never>?
+    // nonisolated(unsafe): only ever set once from init (on the main
+    // actor) and read/cancelled from deinit, which Swift always treats as
+    // nonisolated even on an @MainActor class — there's no real data race
+    // here (Task itself is Sendable), just a shape the isolation checker
+    // can't express any other way.
+    private nonisolated(unsafe) var updatesTask: Task<Void, Never>?
 
     init() {
         updatesTask = Task { [weak self] in
@@ -120,7 +125,10 @@ final class SubscriptionManager {
     }
 
     private func observeTransactionUpdates() async {
-        for await update in Transaction.updates {
+        // Explicitly StoreKit.Transaction — Habitium also has its own
+        // (finance) `Transaction` @Model in this module, and the bare name
+        // resolves to that one instead, which has no `.updates` member.
+        for await update in StoreKit.Transaction.updates {
             if case .verified(let transaction) = update {
                 await transaction.finish()
             }
@@ -131,7 +139,7 @@ final class SubscriptionManager {
     private func refreshEntitlements() async {
         var subscriptionActive = false
         var lifetimeOwned = false
-        for await result in Transaction.currentEntitlements {
+        for await result in StoreKit.Transaction.currentEntitlements {
             guard case .verified(let transaction) = result, transaction.revocationDate == nil else { continue }
             if transaction.productID == HabitiumProduct.proMonthly {
                 subscriptionActive = true

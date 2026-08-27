@@ -98,7 +98,7 @@ final class FoodTrackerViewModel {
     func analyzePhoto(_ imageData: Data, mealType: MealType, context: String? = nil) async {
         await runAnalysis {
             let provider = self.currentProvider()
-            try await self.container.makeAnalyzeMealUseCase(provider: provider)
+            return try await self.container.makeAnalyzeMealUseCase(provider: provider)
                 .executeWithPhoto(imageData: imageData, mealType: mealType, additionalContext: context, analyzedBy: provider.rawValue)
         }
     }
@@ -106,7 +106,7 @@ final class FoodTrackerViewModel {
     func analyzeDescription(_ text: String, mealType: MealType) async {
         await runAnalysis {
             let provider = self.currentProvider()
-            try await self.container.makeAnalyzeMealUseCase(provider: provider)
+            return try await self.container.makeAnalyzeMealUseCase(provider: provider)
                 .executeWithDescription(text, mealType: mealType, analyzedBy: provider.rawValue)
         }
     }
