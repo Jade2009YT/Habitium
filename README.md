@@ -543,10 +543,20 @@ sin poder compilarlo yo mismo. Si Xcode se queja de algún nombre de método,
 lo más probable es que sea un cambio de nombre casi idéntico — la
 arquitectura de estos archivos no debería necesitar cambiar por eso.
 
-**Qué falta a propósito**: la app de Android que motivó este cambio (ver
-"Android" más abajo) — este apartado es solo la base de datos compartida que
-Android también usará. El iPad del cole se resuelve con una futura app web,
-que reutiliza exactamente estas mismas tablas.
+**Qué falta a propósito**: la app nativa de Android — este apartado es solo
+la base de datos compartida que Android también usará cuando llegue.
+
+### Web (`web/`)
+
+Ya construida y funcionando sobre estas mismas tablas: HTML, CSS y un JS,
+sin servidor propio. Cubre login/registro, Inicio, Nutrición, Agenda,
+Finanzas y Hábitos. Pensada para el iPad del cole (que solo permite
+páginas web) y para cualquier Android sin instalar nada, y preparada para
+"Añadir a pantalla de inicio" como si fuera una app.
+
+A diferencia de iOS, **no guarda nada en local**: lee y escribe directo
+contra Postgres, así que necesita conexión. Ver `web/README.md` para
+ponerla en marcha y para publicarla en un Synology con Web Station.
 
 ## Lo mejor de las apps mejor valoradas, adaptado a Habitium
 

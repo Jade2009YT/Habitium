@@ -1,0 +1,402 @@
+/* Habitium web — hoja de estilos única.
+   Paleta y tono a juego con la app de iOS (Theme.swift): verde para
+   nutrición, azul para agenda, naranja para finanzas, morado para
+   hábitos/medicación. Se adapta a claro/oscuro según el sistema. */
+
+:root {
+  --green: #16a34a;
+  --green-deep: #16804f;
+  --blue: #2563eb;
+  --orange: #ea580c;
+  --purple: #7c3aed;
+  --danger: #dc2626;
+
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --text: #16181d;
+  --text-muted: #6b7280;
+  --border: rgba(0, 0, 0, 0.09);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.07), 0 6px 20px rgba(0, 0, 0, 0.05);
+
+  --radius: 14px;
+  --tabbar-h: 60px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d0f12;
+    --surface: #171a1f;
+    --text: #f2f4f7;
+    --text-muted: #9aa3af;
+    --border: rgba(255, 255, 255, 0.10);
+    --shadow: none;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+[hidden] { display: none !important; }
+
+/* ── Marca ─────────────────────────────────────────────────────────── */
+
+.leaf-mark {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto;
+  border-radius: 40% 8% 40% 8%;
+  background: linear-gradient(135deg, #34c77b, var(--green-deep));
+  transform: rotate(-45deg);
+}
+.leaf-mark-sm { width: 26px; height: 26px; margin: 0; }
+
+/* ── Arranque ──────────────────────────────────────────────────────── */
+
+.boot {
+  min-height: 100dvh;
+  display: grid;
+  place-content: center;
+  gap: 16px;
+  text-align: center;
+}
+.boot-text { color: var(--text-muted); font-size: 14px; }
+
+/* ── Login ─────────────────────────────────────────────────────────── */
+
+.auth-screen,
+.config-error {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 28px 24px 22px;
+  text-align: center;
+}
+.auth-card h1 { margin: 16px 0 4px; font-size: 26px; }
+.subtitle { margin: 0 0 20px; color: var(--text-muted); font-size: 14px; }
+
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 16px;
+}
+.segment {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 14px;
+  padding: 8px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.segment.is-active {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.field { display: block; text-align: left; margin-bottom: 12px; }
+.field > span {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+input, select {
+  width: 100%;
+  font: inherit;
+  font-size: 16px; /* 16px evita que iOS haga zoom al enfocar */
+  padding: 10px 12px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+input:focus, select:focus {
+  outline: 2px solid var(--green);
+  outline-offset: -1px;
+}
+
+.auth-message {
+  min-height: 20px;
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--danger);
+}
+.auth-message.is-ok { color: var(--green); }
+
+.fineprint {
+  margin: 18px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* ── Botones ───────────────────────────────────────────────────────── */
+
+.btn {
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 11px 16px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  background: var(--bg);
+  color: var(--text);
+}
+.btn-primary { background: var(--green); color: #fff; }
+.btn-primary:disabled { opacity: 0.55; cursor: default; }
+.btn-block { width: 100%; margin-top: 4px; }
+
+.btn-link {
+  margin-top: 10px;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.btn-icon {
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 19px;
+  cursor: pointer;
+  padding: 6px;
+  line-height: 1;
+}
+
+/* ── Estructura de la app ──────────────────────────────────────────── */
+
+.app { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); }
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: max(12px, env(safe-area-inset-top)) 16px 12px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+.app-header h1 { flex: 1; margin: 0; font-size: 19px; }
+
+.sync-banner {
+  margin: 12px 16px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.view { padding: 16px; }
+
+.section-title {
+  margin: 22px 0 8px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+/* ── Tarjetas de Inicio ────────────────────────────────────────────── */
+
+.cards { display: grid; gap: 12px; }
+@media (min-width: 640px) {
+  .cards { grid-template-columns: 1fr 1fr; }
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--text-muted);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+.card h2 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.card-nutrition { border-left-color: var(--green); }
+.card-habits { border-left-color: var(--purple); }
+.card-planner { border-left-color: var(--blue); }
+.card-finance { border-left-color: var(--orange); }
+
+.metric { margin: 0; font-size: 30px; font-weight: 700; line-height: 1.1; }
+.metric small { font-size: 13px; font-weight: 500; color: var(--text-muted); }
+.metric-sm { margin: 0; font-size: 17px; font-weight: 600; }
+.muted { margin: 6px 0 0; font-size: 13px; color: var(--text-muted); }
+
+.bar {
+  height: 6px;
+  margin-top: 10px;
+  background: var(--bg);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.bar-fill {
+  height: 100%;
+  width: 0;
+  background: var(--green);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.bar-fill.is-over { background: var(--danger); }
+
+/* ── Formularios en línea ──────────────────────────────────────────── */
+
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.inline-form input[type="text"] { flex: 1 1 160px; }
+.inline-form input[type="number"] { flex: 0 1 110px; }
+.inline-form input[type="date"] { flex: 0 1 150px; }
+.inline-form select { flex: 0 1 140px; }
+.inline-form .btn { flex: 0 0 auto; }
+
+.macros-details { margin: 10px 0 0; }
+.macros-details summary {
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.macro-row { display: flex; gap: 8px; margin-top: 8px; }
+.macro-row .field { flex: 1; margin-bottom: 0; }
+
+/* ── Listas ────────────────────────────────────────────────────────── */
+
+.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.list-muted { opacity: 0.6; }
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 12px 14px;
+}
+.row-main { flex: 1; min-width: 0; }
+.row-title { font-size: 15px; font-weight: 600; }
+.row-title.is-done { text-decoration: line-through; color: var(--text-muted); }
+.row-sub { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
+.row-value { font-size: 15px; font-weight: 700; white-space: nowrap; }
+.row-value.is-income { color: var(--green); }
+.row-value.is-expense { color: var(--danger); }
+
+.check {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: none;
+  color: transparent;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.check.is-checked {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+
+.numeric-input { flex: 0 0 74px; text-align: right; }
+
+.delete {
+  flex: 0 0 auto;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+}
+
+.empty {
+  padding: 22px 14px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 11px;
+}
+
+.streak { color: var(--orange); font-weight: 600; }
+
+/* ── Barra de pestañas ─────────────────────────────────────────────── */
+
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(14px);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tab {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  padding: 8px 2px;
+  cursor: pointer;
+}
+.tab span { font-size: 19px; line-height: 1; }
+.tab.is-active { color: var(--green); font-weight: 600; }

@@ -1,0 +1,19 @@
+{
+  "name": "Habitium",
+  "short_name": "Habitium",
+  "description": "Tu cuidado personal, todo en un solo lugar.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d0f12",
+  "theme_color": "#16804f",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
