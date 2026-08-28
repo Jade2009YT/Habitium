@@ -172,8 +172,13 @@ final class SwiftDataHabitRepository: HabitRepository {
     /// CalculateLoggingStreakUseCase, just scoped to one habit and
     /// evaluated against its own goal instead of "any entry exists".
     private func streak(for habit: Habit) -> Int {
+        // Pull the id out first: inside #Predicate, `habit.id` on a
+        // @Model reads as part of the query (a key path into another
+        // model) rather than as a captured constant, which doesn't
+        // type-check. A plain local UUID does.
+        let habitID = habit.id
         let allLogsDescriptor = FetchDescriptor<HabitLog>(
-            predicate: #Predicate<HabitLog> { $0.habitID == habit.id }
+            predicate: #Predicate<HabitLog> { $0.habitID == habitID }
         )
         let allLogs = (try? context.fetch(allLogsDescriptor)) ?? []
         let calendar = Calendar.current
