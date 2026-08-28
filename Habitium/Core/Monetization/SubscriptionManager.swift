@@ -53,13 +53,19 @@ final class SubscriptionManager {
     var monthlyProduct: Product? { products.first { $0.id == HabitiumProduct.proMonthly } }
     var lifetimeProduct: Product? { products.first { $0.id == HabitiumProduct.lifetime } }
 
-    // nonisolated because deinit is always nonisolated, even on an
-    // @MainActor class, and needs to cancel this. Task is Sendable, so
-    // plain `nonisolated` is enough — no (unsafe) needed.
-    private nonisolated var updatesTask: Task<Void, Never>?
+    /// Holds the long-running Transaction.updates task so deinit can
+    /// cancel it. It lives in a separate box because deinit is always
+    /// nonisolated (even on an @MainActor class) and so can't touch an
+    /// isolated stored property — and `nonisolated` itself can't be
+    /// applied to a mutable stored property. A `nonisolated let` pointing
+    /// at a box whose contents we mutate is the way around that.
+    private final class TaskBox: @unchecked Sendable {
+        var task: Task<Void, Never>?
+    }
+    private nonisolated let taskBox = TaskBox()
 
     init() {
-        updatesTask = Task { [weak self] in
+        taskBox.task = Task { [weak self] in
             await self?.observeTransactionUpdates()
         }
         Task { [weak self] in
@@ -69,7 +75,7 @@ final class SubscriptionManager {
     }
 
     deinit {
-        updatesTask?.cancel()
+        taskBox.task?.cancel()
     }
 
     func loadProducts() async {
