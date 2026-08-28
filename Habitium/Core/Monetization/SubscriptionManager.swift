@@ -53,12 +53,10 @@ final class SubscriptionManager {
     var monthlyProduct: Product? { products.first { $0.id == HabitiumProduct.proMonthly } }
     var lifetimeProduct: Product? { products.first { $0.id == HabitiumProduct.lifetime } }
 
-    // nonisolated(unsafe): only ever set once from init (on the main
-    // actor) and read/cancelled from deinit, which Swift always treats as
-    // nonisolated even on an @MainActor class — there's no real data race
-    // here (Task itself is Sendable), just a shape the isolation checker
-    // can't express any other way.
-    private nonisolated(unsafe) var updatesTask: Task<Void, Never>?
+    // nonisolated because deinit is always nonisolated, even on an
+    // @MainActor class, and needs to cancel this. Task is Sendable, so
+    // plain `nonisolated` is enough — no (unsafe) needed.
+    private nonisolated var updatesTask: Task<Void, Never>?
 
     init() {
         updatesTask = Task { [weak self] in

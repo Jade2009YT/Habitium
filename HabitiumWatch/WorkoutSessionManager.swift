@@ -48,9 +48,13 @@ final class WorkoutSessionManager: NSObject {
             HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) ?? HKObjectType.workoutType()
         ]
 
+        // Bind self to a `let` out here, before the Task — referencing the
+        // closure's captured `self` var from inside concurrently-executing
+        // code is a warning today and an error in Swift 6. This class is
+        // @MainActor, so it's implicitly Sendable and safe to hold onto.
         healthStore.requestAuthorization(toShare: shareTypes, read: readTypes) { [weak self] success, error in
+            guard let self else { return }
             Task { @MainActor in
-                guard let self else { return }
                 guard success else {
                     self.state = .error(error?.localizedDescription ?? "Permiso de Salud denegado.")
                     return
@@ -79,8 +83,9 @@ final class WorkoutSessionManager: NSObject {
             let now = Date()
             session.startActivity(with: now)
             builder.beginCollection(withStart: now) { [weak self] success, error in
+                guard let self else { return }
                 Task { @MainActor in
-                    self?.state = success ? .active : .error(error?.localizedDescription ?? "No se pudo iniciar el entrenamiento.")
+                    self.state = success ? .active : .error(error?.localizedDescription ?? "No se pudo iniciar el entrenamiento.")
                 }
             }
         } catch {
@@ -93,11 +98,12 @@ final class WorkoutSessionManager: NSObject {
         session.end()
         let endDate = Date()
         builder.endCollection(withEnd: endDate) { [weak self] _, _ in
+            guard let self else { return }
             builder.finishWorkout { _, _ in
                 Task { @MainActor in
-                    self?.state = .ended
-                    self?.session = nil
-                    self?.builder = nil
+                    self.state = .ended
+                    self.session = nil
+                    self.builder = nil
                 }
             }
         }

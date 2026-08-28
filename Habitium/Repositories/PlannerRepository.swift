@@ -95,11 +95,16 @@ final class SwiftDataPlannerRepository: PlannerRepository {
     }
 
     func focusTasks() -> [PlannerTask] {
+        // Bool isn't Comparable, so "incomplete first" can't be a
+        // SortDescriptor — SwiftData sorts by createdAt, then we bring the
+        // incomplete ones to the front in memory (the list is capped at 3,
+        // so this costs nothing).
         let descriptor = FetchDescriptor<PlannerTask>(
             predicate: #Predicate<PlannerTask> { $0.isFocus },
-            sortBy: [SortDescriptor(\.isCompleted), SortDescriptor(\.createdAt)]
+            sortBy: [SortDescriptor(\.createdAt)]
         )
-        return (try? context.fetch(descriptor)) ?? []
+        let tasks = (try? context.fetch(descriptor)) ?? []
+        return tasks.filter { !$0.isCompleted } + tasks.filter(\.isCompleted)
     }
 
     @discardableResult
