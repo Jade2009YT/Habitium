@@ -18,6 +18,7 @@ struct RootView: View {
     @Environment(AppDependencyContainer.self) private var container
     @Environment(AppleSignInManager.self) private var authManager
     @Environment(SupabaseAuthManager.self) private var emailAuth
+    @Environment(LocalAccessManager.self) private var localAccess
     @Environment(AppLockManager.self) private var lockManager
     @Environment(\.modelContext) private var modelContext
 
@@ -25,7 +26,7 @@ struct RootView: View {
         authManager.hasCheckedCredential && emailAuth.hasCheckedSession
     }
     private var isSignedIn: Bool {
-        authManager.isSignedIn || emailAuth.isSignedIn
+        authManager.isSignedIn || emailAuth.isSignedIn || localAccess.isUsingLocalOnly
     }
 
     var body: some View {

@@ -21,6 +21,7 @@ struct HabitiumApp: App {
     @State private var deepLinkCoordinator = DeepLinkCoordinator()
     @State private var authManager = AppleSignInManager()
     @State private var emailAuth = SupabaseAuthManager()
+    @State private var localAccess = LocalAccessManager()
     @State private var lockManager = AppLockManager()
     @Environment(\.scenePhase) private var scenePhase
 
@@ -36,6 +37,7 @@ struct HabitiumApp: App {
                 .environment(deepLinkCoordinator)
                 .environment(authManager)
                 .environment(emailAuth)
+                .environment(localAccess)
                 .environment(lockManager)
                 .task {
                     NotificationScheduler.shared.requestAuthorizationIfNeeded()

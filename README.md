@@ -101,10 +101,19 @@ sección) — mismo proyecto, sin reescrituras. Android quedaría como una
 decisión futura independiente, el día que de verdad quieras invertir en
 ello.
 
-## Inicio de sesión (Sign in with Apple + email/contraseña)
+## Inicio de sesión (Apple, email/contraseña, o sin cuenta)
 
-`LoginView` ofrece dos formas de entrar, cualquiera de las dos desbloquea la
-app (`RootView` comprueba `authManager.isSignedIn || emailAuth.isSignedIn`):
+`LoginView` ofrece tres formas de entrar, cualquiera de las tres desbloquea
+la app (`RootView` comprueba
+`authManager.isSignedIn || emailAuth.isSignedIn || localAccess.isUsingLocalOnly`).
+
+**Empieza por aquí si estás construyendo esto con una cuenta de Apple
+gratuita**: usa **"Usar sin cuenta"**. Sign in with Apple necesita un
+entitlement que una cuenta gratuita no puede usar, y la opción de email solo
+aparece si has configurado Supabase — así que en un primer arranque típico
+las otras dos puertas están cerradas a la vez. La opción sin cuenta siempre
+está disponible por eso mismo; puedes cambiar a una cuenta real más adelante
+desde **Ajustes → Cuenta** sin perder nada de lo guardado.
 
 ### Sign in with Apple
 
@@ -126,7 +135,17 @@ Sin backend, sin contraseñas que proteger:
 Requiere que actives la capability **Sign in with Apple** en el target
 `Habitium` con tu Team — XcodeGen ya genera el entitlement
 (`com.apple.developer.applesignin`), pero Xcode necesita tu cuenta de
-desarrollador conectada para firmarlo.
+desarrollador conectada para firmarlo. **Con una cuenta de Apple gratuita
+esto no funciona**: ese entitlement solo está disponible en el programa de
+pago (99 €/año). Usa la opción "Usar sin cuenta" mientras tanto.
+
+### Sin cuenta (solo en este iPhone)
+
+Siempre disponible, y la vía correcta para uso personal con cuenta de Apple
+gratuita. Guarda la elección en `UserDefaults`
+(`Core/Auth/LocalAccessManager.swift`) y no cambia nada más: los datos ya
+vivían en local de todos modos. Lo único que no tienes es la sincronización
+entre dispositivos, que por definición necesita una cuenta de Supabase.
 
 ### Registro con email y contraseña (Supabase Auth)
 

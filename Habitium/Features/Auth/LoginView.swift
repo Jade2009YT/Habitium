@@ -2,10 +2,17 @@
 //  LoginView.swift
 //  Habitium
 //
-//  Gate screen shown before the app is unlocked. Two independent ways in:
-//  Sign in with Apple (no password to protect, ever), or email/password
-//  via Supabase (SupabaseAuthManager) for people who'd rather not use
-//  their Apple ID. Either one satisfies RootView's "signed in" check.
+//  Gate screen shown before the app is unlocked. Three independent ways
+//  in, any of which satisfies RootView's "signed in" check:
+//    1. Sign in with Apple — no password to protect, ever. Needs a paid
+//       Apple Developer account for the entitlement, so it fails on a
+//       free personal-team build.
+//    2. Email/password via Supabase (SupabaseAuthManager) — the only
+//       one that enables cross-device sync. Hidden entirely when
+//       Secrets.xcconfig has no Supabase credentials.
+//    3. No account at all (LocalAccessManager) — always shown, because
+//       the first two can both be unavailable at once and the app must
+//       never be unreachable.
 //
 
 import AuthenticationServices
@@ -14,6 +21,7 @@ import SwiftUI
 struct LoginView: View {
     @Environment(AppleSignInManager.self) private var authManager
     @Environment(SupabaseAuthManager.self) private var emailAuth
+    @Environment(LocalAccessManager.self) private var localAccess
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var showingEmailForm = false
@@ -54,7 +62,9 @@ struct LoginView: View {
                             }
                         }
 
-                        Text("Todos tus datos se guardan solo en este iPhone. Iniciar sesión no envía tus comidas, finanzas ni notas a ningún servidor de Habitium — no tenemos ninguno.")
+                        localAccessSection
+
+                        Text(privacyNote)
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -80,6 +90,41 @@ struct LoginView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
+    }
+
+    /// Always available, and always last — an account is the better
+    /// option when one is actually usable (it's what enables sync), but
+    /// the app must never be unreachable when neither other door opens.
+    private var localAccessSection: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Rectangle().fill(Color.secondary.opacity(0.3)).frame(height: 1)
+                Text("o").font(.caption).foregroundStyle(.secondary)
+                Rectangle().fill(Color.secondary.opacity(0.3)).frame(height: 1)
+            }
+            .padding(.vertical, 4)
+
+            Button {
+                localAccess.continueWithoutAccount()
+            } label: {
+                Text("Usar sin cuenta")
+                    .font(.subheadline.bold())
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+
+            Text("Todo se guarda solo en este iPhone. Podrás crear una cuenta más adelante desde Ajustes.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.top, 4)
+    }
+
+    private var privacyNote: String {
+        emailAuth.isConfigured
+            ? "Con cuenta de email, tus datos se sincronizan de forma privada para que los tengas igual en todos tus dispositivos. Sin cuenta, o con Apple, se quedan solo en este iPhone."
+            : "Todos tus datos se guardan solo en este iPhone."
     }
 
     private var emailToggle: some View {
@@ -214,4 +259,5 @@ private struct EmailAuthForm: View {
     LoginView()
         .environment(AppleSignInManager())
         .environment(SupabaseAuthManager())
+        .environment(LocalAccessManager())
 }

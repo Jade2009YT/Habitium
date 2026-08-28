@@ -12,6 +12,7 @@ struct SettingsView: View {
     @Environment(AppDependencyContainer.self) private var container
     @Environment(AppleSignInManager.self) private var authManager
     @Environment(SupabaseAuthManager.self) private var emailAuth
+    @Environment(LocalAccessManager.self) private var localAccess
     @Environment(AppLockManager.self) private var lockManager
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: SettingsViewModel?
@@ -63,17 +64,20 @@ struct SettingsView: View {
                 }
                 Spacer()
             }
-            Button("Cerrar sesión", role: .destructive) {
+            Button(localAccess.isUsingLocalOnly ? "Crear cuenta o iniciar sesión" : "Cerrar sesión", role: localAccess.isUsingLocalOnly ? nil : .destructive) {
                 Task {
                     authManager.signOut()
                     await emailAuth.signOut()
+                    localAccess.exitLocalOnly()
                     dismiss()
                 }
             }
         } header: {
             Text("Cuenta")
         } footer: {
-            Text("Tus datos siguen en este iPhone al cerrar sesión — solo se te pedirá volver a entrar.")
+            Text(localAccess.isUsingLocalOnly
+                 ? "Estás usando Habitium sin cuenta: todo se guarda solo en este iPhone. Crear una cuenta de email te permitiría tener los mismos datos en otros dispositivos. Nada de lo que ya has guardado se pierde."
+                 : "Tus datos siguen en este iPhone al cerrar sesión — solo se te pedirá volver a entrar.")
         }
     }
 
@@ -84,12 +88,16 @@ struct SettingsView: View {
         if case .signedIn(let email) = emailAuth.state, !email.isEmpty {
             return email
         }
-        return container.currentUserSettings().email ?? "Tu cuenta"
+        if let email = container.currentUserSettings().email, !email.isEmpty {
+            return email
+        }
+        return localAccess.isUsingLocalOnly ? "Habitium en local" : "Tu cuenta"
     }
 
     private var accountMethodDescription: String {
         if emailAuth.isSignedIn { return "Correo y contraseña" }
         if authManager.isSignedIn { return "Sign in with Apple" }
+        if localAccess.isUsingLocalOnly { return "Sin cuenta · solo en este iPhone" }
         return ""
     }
 
@@ -269,5 +277,6 @@ private struct SubscriptionStatusRow: View {
         .environment(AppDependencyContainer(modelContext: PersistenceController.preview().container.mainContext))
         .environment(AppleSignInManager())
         .environment(SupabaseAuthManager())
+        .environment(LocalAccessManager())
         .environment(AppLockManager())
 }
