@@ -11,8 +11,12 @@ navegador, igual que hace la app de iPhone.
 ## Puesta en marcha (2 minutos)
 
 1. Copia `config.example.js` a `config.js`.
-2. Abre `config.js` y pon tu **Project URL** y tu **anon key** de Supabase
-   (supabase.com → tu proyecto → Project Settings → API).
+2. Abre `config.js` y pon tu **Project URL** (la raíz, sin `/rest/v1` al
+   final) y tu **clave pública** de Supabase — según cuándo creases el
+   proyecto aparece como `anon / public` (empieza por `eyJ...`) o, en el
+   formato nuevo, como `publishable` (empieza por `sb_publishable_`).
+   Las dos sirven. Están en supabase.com → tu proyecto → Project
+   Settings → API.
 3. Asegúrate de haber aplicado ya `../supabase/schema.sql` en el SQL Editor
    de Supabase (ver `../supabase/README.md`).
 
@@ -92,14 +96,16 @@ propio icono. No es una app nativa, pero se comporta casi igual.
   protección; cierra sesión si usas un dispositivo compartido (como el iPad
   del cole).
 
-## Sobre la seguridad de la anon key
+## Sobre la seguridad de la clave pública
 
-La `anon key` acaba siendo visible para cualquiera que abra la web. Es así
-por diseño: va embebida en el cliente, igual que en la app de iPhone. Lo
-que protege tus datos no es esconderla, sino el **Row Level Security** del
-esquema — cada política exige `auth.uid() = user_id`, así que con esa clave
-y sin iniciar sesión no se puede leer ni escribir nada.
+La clave pública (`anon` / `publishable`) acaba siendo visible para
+cualquiera que abra la web. Es así por diseño: va embebida en el cliente,
+igual que en la app de iPhone. Lo que protege tus datos no es esconderla,
+sino el **Row Level Security** del esquema — cada política exige
+`auth.uid() = user_id`, así que con esa clave y sin iniciar sesión no se
+puede leer ni escribir nada.
 
-La que **nunca** debe salir de Supabase es la **service_role key**: esa sí
-se salta el RLS. No se usa en ningún sitio de este proyecto, y no debe
-aparecer nunca en `config.js` ni en ningún archivo del repo.
+La que **nunca** debe salir de Supabase es la otra: la marcada como
+`service_role` / `secret` (empieza por `sb_secret_` en el formato nuevo).
+Esa sí se salta el RLS. No se usa en ningún sitio de este proyecto, y no
+debe aparecer nunca en `config.js` ni en ningún archivo del repo.
