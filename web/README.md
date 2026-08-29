@@ -37,9 +37,9 @@ Y abre <http://localhost:8000> en el navegador.
 ## Publicarla en tu Synology
 
 1. **Centro de Paquetes** → instala **Web Station** (si no lo tienes).
-2. Copia toda la carpeta `web/` (con tu `config.js` dentro) a la carpeta
-   compartida `web` del NAS, o crea un *Virtual Host* apuntando a donde la
-   hayas dejado.
+2. Copia el **contenido** de la carpeta `web/` (con tu `config.js`
+   dentro) a la carpeta compartida `web` del NAS — `index.html` tiene que
+   quedar directamente ahí, no dentro de otra subcarpeta.
 3. **Panel de Control → Seguridad → Certificado**: consigue un certificado
    gratuito de Let's Encrypt para tu dominio de Synology
    (`loquesea.synology.me`). **Esto no es opcional**: sin `https://`, los
@@ -92,12 +92,12 @@ el móvil. En el móvil las pestañas son las cinco principales (las mismas
 que en iOS); Medicación y Ajustes se alcanzan desde las tarjetas de Inicio
 o desde el escritorio.
 
+- **Funciona sin conexión.** Igual que la app de iPhone: los datos se
+  guardan en el propio dispositivo (IndexedDB) y la nube es la copia que
+  los mantiene iguales en todos lados. Ver "Cómo funcionan los datos".
+
 **No, a propósito:**
 
-- **No funciona sin conexión.** A diferencia de la app de iPhone (que
-  guarda en local y sincroniza), la web lee y escribe directamente contra
-  Postgres. Es mucho más simple, y el caso de uso que la motivó siempre
-  tiene red.
 - **No hay análisis de comidas con IA.** Eso necesitaría poner una clave
   de OpenAI/Anthropic en el navegador, donde cualquiera que abra la web
   podría leerla y gastarla a tu cuenta. Para hacerlo bien haría falta un
@@ -107,6 +107,36 @@ o desde el escritorio.
 - **No hay Face ID ni bloqueo de app.** La sesión del navegador es la única
   protección; cierra sesión si usas un dispositivo compartido (como el iPad
   del cole).
+
+## Cómo funcionan los datos
+
+Misma arquitectura que la app de iPhone, y por las mismas razones:
+
+- **Lo local manda.** Todo se guarda en el propio dispositivo
+  (IndexedDB, vía `store.js`). La interfaz nunca espera a la red: pinta
+  al instante y sincroniza por detrás. Por eso la app abre rápido y sigue
+  funcionando en el metro, en el cole, o si tu NAS está apagado.
+- **La nube es la copia que iguala los dispositivos.** Al recuperar la
+  conexión, los cambios pendientes suben en orden y se baja lo que hayas
+  hecho en otro sitio.
+- **Gana el más reciente.** Si editas lo mismo en dos dispositivos casi a
+  la vez, se queda el cambio más nuevo (por `updated_at`, que pone el
+  dispositivo que hizo la edición, nunca el servidor). No hay fusión
+  campo a campo — igual que en iOS.
+- **Los borrados se propagan.** Se encolan como una operación más, así
+  que lo que borras no reaparece en la siguiente sincronización.
+- **Al cerrar sesión se borra la copia local**, para que en un
+  dispositivo compartido (el iPad del cole) tus datos no queden a la
+  vista del siguiente que entre. Si tenías cambios sin subir, cierra
+  sesión con conexión para no perderlos.
+
+Arriba verás un aviso cuando estés sin conexión o queden cambios por
+subir, para que sepas siempre en qué estado estás.
+
+El **service worker** (`sw.js`) guarda los archivos de la app (no los
+datos) para que arranque al instante y siga abriendo sin red. Cuando
+subas una versión nueva al NAS, incrementa `CACHE_VERSION` dentro de
+`sw.js` — así se limpian las cachés antiguas y todos cogen la nueva.
 
 ## Sobre la seguridad de la clave pública
 

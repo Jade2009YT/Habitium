@@ -1,22 +1,18 @@
-// Habitium web — cliente único contra las mismas tablas de Supabase que
-// usa la app de iPhone (ver supabase/schema.sql y
-// Habitium/Core/Sync/CloudSyncService.swift).
+// Habitium web — interfaz.
 //
-// Diferencia importante con iOS: aquí NO hay copia local. La app de
-// iPhone guarda en SwiftData y sincroniza; la web lee y escribe
-// directamente en Postgres. Eso la hace mucho más simple, pero también
-// significa que sin conexión no funciona — asumido a propósito, porque
-// el caso de uso que la motivó (un iPad del cole, un Android prestado)
-// siempre tiene navegador y red.
+// Ya NO habla con Supabase directamente: todo pasa por store.js, que
+// guarda en IndexedDB y sincroniza por detrás. Esto es lo que hace que
+// la app arranque al instante, funcione sin conexión, y muestre lo mismo
+// que el iPhone en cuanto haya red — la misma arquitectura que
+// SwiftData + CloudSyncService en iOS.
 //
-// Sobre user_id: no se manda nunca desde aquí. Las columnas tienen
-// `default auth.uid()` en el esquema, así que un INSERT normal ya queda
-// atribuido al usuario logueado, y el Row Level Security filtra los
-// SELECT automáticamente. Por eso ninguna consulta de este archivo lleva
-// un `.eq("user_id", ...)`: sería redundante y daría una falsa sensación
-// de que es *eso* lo que protege los datos.
+// Consecuencia práctica para el código de abajo: las funciones de carga
+// son síncronas contra datos ya presentes, y cualquier escritura repinta
+// al momento (optimista) sin esperar al servidor. store.onChange() se
+// encarga de volver a pintar cuando llega algo nuevo de la nube.
 
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+import * as store from "./store.js";
 
 const cfg = window.HABITIUM_CONFIG;
 const isConfigured =
@@ -36,6 +32,17 @@ if (!isConfigured) {
 }
 
 const supabase = createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+
+store.configure(supabase, async () => (await supabase.auth.getUser()).data?.user?.id ?? null);
+
+// El service worker es opcional: si el navegador no lo soporta o la
+// página se sirve por http://, la app funciona igual, solo que sin
+// arranque instantáneo ni modo sin conexión.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch((e) => console.warn("SW:", e));
+  });
+}
 
 // ── Utilidades ──────────────────────────────────────────────────────
 
@@ -59,7 +66,16 @@ const startOfNextMonth = () => {
 };
 const nowISO = () => new Date().toISOString();
 
-/** Lo fija budget_settings.currency_code al cargar; hasta entonces, EUR. */
+const inRange = (iso, from, to) => {
+  const t = new Date(iso).getTime();
+  return t >= from.getTime() && t < to.getTime();
+};
+const sameDay = (iso, day) => {
+  const d = new Date(iso);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime() === day.getTime();
+};
+
 let currencyCode = "EUR";
 const money = (v) =>
   new Intl.NumberFormat("es-ES", {
@@ -72,34 +88,47 @@ const timeOf = (iso) =>
   new Date(iso).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
 const dayOf = (iso) =>
   new Date(iso).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
-
-/** "8:00" a partir de minutos desde medianoche (formato de iOS). */
 const minutesToTime = (m) =>
   `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 
-/** Escapa texto del usuario antes de meterlo en innerHTML. */
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
   );
 
-function showError(msg) {
-  const b = $("sync-banner");
-  b.textContent = msg;
-  b.hidden = false;
-}
-const clearError = () => ($("sync-banner").hidden = true);
+const byDateDesc = (a, b) => new Date(b.date) - new Date(a.date);
 
-/** Envuelve una consulta: devuelve los datos, o enseña el error y null. */
-async function run(promise, what) {
-  const { data, error } = await promise;
-  if (error) {
-    console.error(what, error);
-    showError(`No se pudo ${what}: ${error.message}`);
-    return null;
+// ── Indicador de sincronización ─────────────────────────────────────
+
+function renderSyncBanner() {
+  const b = $("sync-banner");
+  const { online, pending, lastError } = store.syncState;
+
+  if (!online) {
+    b.className = "banner is-info";
+    b.textContent =
+      pending > 0
+        ? `Sin conexión · ${pending} cambio${pending === 1 ? "" : "s"} se subirá${pending === 1 ? "" : "n"} al volver`
+        : "Sin conexión · puedes seguir usando la app";
+    b.hidden = false;
+    return;
   }
-  clearError();
-  return data;
+
+  if (lastError) {
+    b.className = "banner";
+    b.textContent = `Problema al sincronizar: ${lastError}`;
+    b.hidden = false;
+    return;
+  }
+
+  if (pending > 0) {
+    b.className = "banner is-info";
+    b.textContent = `Subiendo ${pending} cambio${pending === 1 ? "" : "s"}…`;
+    b.hidden = false;
+    return;
+  }
+
+  b.hidden = true;
 }
 
 // ── Autenticación ───────────────────────────────────────────────────
@@ -142,8 +171,6 @@ $("auth-form").addEventListener("submit", async (e) => {
   submit.disabled = false;
   if (error) return setAuthMessage(error.message);
 
-  // Con "Confirm email" activo (el ajuste por defecto de Supabase), el
-  // registro no devuelve sesión hasta abrir el enlace del correo.
   if (authMode === "signup" && !data.session) {
     setAuthMessage(`Te hemos enviado un enlace a ${email}. Ábrelo y vuelve aquí.`, true);
   }
@@ -161,7 +188,12 @@ $("forgot-password").addEventListener("click", async () => {
   );
 });
 
-const doSignOut = () => supabase.auth.signOut();
+async function doSignOut() {
+  // Se borra lo local: en un dispositivo compartido (el iPad del cole)
+  // los datos de una cuenta no deben quedar accesibles a la siguiente.
+  await store.wipe();
+  await supabase.auth.signOut();
+}
 $("sign-out").addEventListener("click", doSignOut);
 $("sign-out-2").addEventListener("click", doSignOut);
 
@@ -177,9 +209,8 @@ const NAV = [
   { id: "settings", label: "Ajustes", icon: "⚙️" },
 ];
 
-// La barra de pestañas del móvil no puede con 7 destinos sin quedar
-// ilegible; Medicación y Ajustes se alcanzan desde el escritorio o
-// desde las tarjetas. Las 5 principales son las mismas que en iOS.
+// La barra del móvil no puede con 7 destinos sin quedar ilegible;
+// Medicación y Ajustes se alcanzan desde las tarjetas de Inicio.
 const MOBILE_TABS = ["home", "nutrition", "planner", "finance", "habits"];
 
 function buildNav() {
@@ -197,8 +228,6 @@ function buildNav() {
     )
     .join("");
 
-  // Cubre la barra lateral, las pestañas, las tarjetas de Inicio y el
-  // enlace a Ajustes — todos usan el mismo atributo data-view.
   document.querySelectorAll("[data-view]").forEach((el) => {
     el.addEventListener("click", () => go(el.dataset.view));
     // Las tarjetas son <article role="button">, no <button>, así que el
@@ -227,11 +256,13 @@ function go(view) {
   );
   $("topbar-title").textContent = NAV.find((n) => n.id === view)?.label ?? "";
   window.scrollTo({ top: 0 });
-  refreshView(view);
+  render();
 }
 
-function refreshView(view) {
-  return {
+/** Repinta la vista activa desde los datos locales. */
+async function render() {
+  renderSyncBanner();
+  await {
     home: loadHome,
     nutrition: loadNutrition,
     planner: loadPlanner,
@@ -239,10 +270,19 @@ function refreshView(view) {
     habits: loadHabits,
     medication: loadMedication,
     settings: loadSettings,
-  }[view]?.();
+  }[currentView]?.();
 }
 
-$("refresh").addEventListener("click", () => refreshView(currentView));
+store.onChange(render);
+
+$("refresh").addEventListener("click", () => store.sync());
+
+/** Cablea todos los botones .delete de una lista contra una tabla. */
+function wireDelete(list, table) {
+  list.querySelectorAll("[data-del]").forEach((btn) => {
+    btn.addEventListener("click", () => store.remove(table, btn.dataset.del));
+  });
+}
 
 // ── Nutrición ───────────────────────────────────────────────────────
 
@@ -253,24 +293,16 @@ const MEALS = {
   snack: { name: "Snack", icon: "🥕" },
 };
 
-const todaysFood = () =>
-  run(
-    supabase
-      .from("food_entries")
-      .select("*")
-      .gte("date", startOfToday().toISOString())
-      .lt("date", startOfTomorrow().toISOString())
-      .order("date", { ascending: true }),
-    "cargar las comidas"
-  );
+const todaysFood = async () =>
+  (await store.all("food_entries"))
+    .filter((e) => inRange(e.date, startOfToday(), startOfTomorrow()))
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-const nutritionGoal = async () =>
-  (await run(supabase.from("nutrition_goals").select("*").limit(1), "cargar tu objetivo"))?.[0] ?? null;
+const nutritionGoal = () => store.getSingleton("nutrition_goals");
 
 async function loadNutrition() {
-  const entries = (await todaysFood()) ?? [];
-  const total = entries.reduce((s, e) => s + (e.calories ?? 0), 0);
-  $("food-total").textContent = `${Math.round(total)} kcal`;
+  const entries = await todaysFood();
+  $("food-total").textContent = `${Math.round(entries.reduce((s, e) => s + (e.calories ?? 0), 0))} kcal`;
 
   const list = $("food-list");
   if (!entries.length) {
@@ -296,50 +328,32 @@ async function loadNutrition() {
     )
     .join("");
 
-  wireDelete(list, "food_entries", loadNutrition, "eliminar la comida");
+  wireDelete(list, "food_entries");
 }
 
 $("food-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  await run(
-    supabase.from("food_entries").insert({
-      name: $("food-name").value.trim(),
-      date: nowISO(),
-      meal_type: $("food-meal").value,
-      source: "manual",
-      calories: Number($("food-calories").value) || 0,
-      protein_grams: Number($("food-protein").value) || 0,
-      carbs_grams: Number($("food-carbs").value) || 0,
-      fat_grams: Number($("food-fat").value) || 0,
-      updated_at: nowISO(),
-    }),
-    "guardar la comida"
-  );
-  e.target.reset();
-  loadNutrition();
-});
-
-/** Cablea todos los botones .delete de una lista contra una tabla. */
-function wireDelete(list, table, reload, what) {
-  list.querySelectorAll("[data-del]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      await run(supabase.from(table).delete().eq("id", btn.dataset.del), what);
-      reload();
-    });
+  await store.insert("food_entries", {
+    name: $("food-name").value.trim(),
+    date: nowISO(),
+    meal_type: $("food-meal").value,
+    source: "manual",
+    calories: Number($("food-calories").value) || 0,
+    protein_grams: Number($("food-protein").value) || 0,
+    carbs_grams: Number($("food-carbs").value) || 0,
+    fat_grams: Number($("food-fat").value) || 0,
   });
-}
+  e.target.reset();
+});
 
 // ── Agenda ──────────────────────────────────────────────────────────
 
 async function loadPlanner() {
-  const tasks =
-    (await run(
-      supabase
-        .from("planner_tasks")
-        .select("*")
-        .order("due_date", { ascending: true, nullsFirst: false }),
-      "cargar las tareas"
-    )) ?? [];
+  const tasks = (await store.all("planner_tasks")).sort((a, b) => {
+    if (!a.due_date) return 1;
+    if (!b.due_date) return -1;
+    return new Date(a.due_date) - new Date(b.due_date);
+  });
 
   const pending = tasks.filter((t) => !t.is_completed);
   $("task-count").textContent = String(pending.length);
@@ -373,39 +387,29 @@ function renderTasks(list, tasks, emptyText) {
     .join("");
 
   list.querySelectorAll("[data-toggle]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      await run(
-        supabase
-          .from("planner_tasks")
-          .update({ is_completed: btn.dataset.done !== "true", updated_at: nowISO() })
-          .eq("id", btn.dataset.toggle),
-        "actualizar la tarea"
-      );
-      loadPlanner();
-    });
+    btn.addEventListener("click", () =>
+      store.update("planner_tasks", btn.dataset.toggle, {
+        is_completed: btn.dataset.done !== "true",
+      })
+    );
   });
 
-  wireDelete(list, "planner_tasks", loadPlanner, "eliminar la tarea");
+  wireDelete(list, "planner_tasks");
 }
 
 $("task-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const due = $("task-due").value;
-  await run(
-    supabase.from("planner_tasks").insert({
-      title: $("task-title").value.trim(),
-      // El input date da "YYYY-MM-DD" sin hora; mediodía evita que un
-      // desfase de zona horaria lo mueva al día anterior.
-      due_date: due ? new Date(`${due}T12:00:00`).toISOString() : null,
-      is_completed: false,
-      priority: "medium",
-      is_focus: false,
-      updated_at: nowISO(),
-    }),
-    "guardar la tarea"
-  );
+  await store.insert("planner_tasks", {
+    title: $("task-title").value.trim(),
+    // El input date da "YYYY-MM-DD" sin hora; mediodía evita que un
+    // desfase de zona horaria lo mueva al día anterior.
+    due_date: due ? new Date(`${due}T12:00:00`).toISOString() : null,
+    is_completed: false,
+    priority: "medium",
+    is_focus: false,
+  });
   e.target.reset();
-  loadPlanner();
 });
 
 // ── Finanzas ────────────────────────────────────────────────────────
@@ -421,27 +425,20 @@ const CATEGORIES = {
   other: { name: "Otro", icon: "•••" },
 };
 
-const monthTransactions = () =>
-  run(
-    supabase
-      .from("transactions")
-      .select("*")
-      .gte("date", startOfMonth().toISOString())
-      .lt("date", startOfNextMonth().toISOString())
-      .order("date", { ascending: false }),
-    "cargar los movimientos"
-  );
+const monthTransactions = async () =>
+  (await store.all("transactions"))
+    .filter((t) => inRange(t.date, startOfMonth(), startOfNextMonth()))
+    .sort(byDateDesc);
 
 async function budgetSettings() {
-  const rows = await run(supabase.from("budget_settings").select("*").limit(1), "cargar tu presupuesto");
-  const b = rows?.[0] ?? null;
+  const b = await store.getSingleton("budget_settings");
   if (b?.currency_code) currencyCode = b.currency_code;
   return b;
 }
 
 async function loadFinance() {
   const budget = await budgetSettings(); // fija la moneda antes de formatear
-  const txs = (await monthTransactions()) ?? [];
+  const txs = await monthTransactions();
 
   const income = txs.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
   const expense = txs.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
@@ -451,7 +448,6 @@ async function loadFinance() {
   $("fin-expense").textContent = money(expense);
   $("fin-available").textContent = money(Math.max(0, monthly - expense));
 
-  // Barras por categoría (solo gastos), de mayor a menor.
   const byCategory = {};
   for (const t of txs) {
     if (t.type !== "expense") continue;
@@ -495,24 +491,19 @@ async function loadFinance() {
     })
     .join("");
 
-  wireDelete(list, "transactions", loadFinance, "eliminar el movimiento");
+  wireDelete(list, "transactions");
 }
 
 $("tx-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  await run(
-    supabase.from("transactions").insert({
-      amount: Number($("tx-amount").value) || 0,
-      type: $("tx-type").value,
-      category: $("tx-category").value,
-      note: $("tx-note").value.trim() || null,
-      date: nowISO(),
-      updated_at: nowISO(),
-    }),
-    "guardar el movimiento"
-  );
+  await store.insert("transactions", {
+    amount: Number($("tx-amount").value) || 0,
+    type: $("tx-type").value,
+    category: $("tx-category").value,
+    note: $("tx-note").value.trim() || null,
+    date: nowISO(),
+  });
   e.target.reset();
-  loadFinance();
 });
 
 // ── Hábitos ─────────────────────────────────────────────────────────
@@ -585,24 +576,14 @@ function streakFor(habit, logs) {
   return streak;
 }
 
-const logForToday = (logs, habitId) => {
-  const today = startOfToday().getTime();
-  return logs.find((l) => {
-    if (l.habit_id !== habitId) return false;
-    const d = new Date(l.date);
-    d.setHours(0, 0, 0, 0);
-    return d.getTime() === today;
-  });
-};
+const logForToday = (logs, habitId) =>
+  logs.find((l) => l.habit_id === habitId && sameDay(l.date, startOfToday()));
 
 async function fetchHabits() {
-  const habits =
-    (await run(
-      supabase.from("habits").select("*").eq("is_active", true).order("sort_order"),
-      "cargar los hábitos"
-    )) ?? [];
-  const logs = (await run(supabase.from("habit_logs").select("*"), "cargar los registros")) ?? [];
-  return { habits, logs };
+  const habits = (await store.all("habits"))
+    .filter((h) => h.is_active)
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  return { habits, logs: await store.all("habit_logs") };
 }
 
 async function loadHabits() {
@@ -651,80 +632,51 @@ async function loadHabits() {
     .join("");
 
   list.querySelectorAll("[data-toggle-habit]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      await upsertHabitLog(btn.dataset.toggleHabit, { is_completed: btn.dataset.done !== "true" });
-      loadHabits();
-    });
+    btn.addEventListener("click", () =>
+      upsertHabitLog(btn.dataset.toggleHabit, { is_completed: btn.dataset.done !== "true" })
+    );
   });
 
   list.querySelectorAll("[data-log-habit]").forEach((input) => {
-    input.addEventListener("change", async () => {
+    input.addEventListener("change", () => {
       const value = input.value === "" ? null : Number(input.value);
       // Un número registrado cuenta como "hecho" ese día, se cumpla el
       // objetivo o no — igual que HabitRepository.logValue en iOS.
-      await upsertHabitLog(input.dataset.logHabit, { value, is_completed: value != null });
-      loadHabits();
+      upsertHabitLog(input.dataset.logHabit, { value, is_completed: value != null });
     });
   });
 
-  // habit_logs cae solo por el ON DELETE CASCADE del esquema.
-  wireDelete(list, "habits", loadHabits, "eliminar el hábito");
+  wireDelete(list, "habits");
 }
 
 /** Crea o actualiza el registro de HOY para un hábito. */
 async function upsertHabitLog(habitId, fields) {
-  const today = startOfToday();
-  const existing = await run(
-    supabase
-      .from("habit_logs")
-      .select("id")
-      .eq("habit_id", habitId)
-      .gte("date", today.toISOString())
-      .lt("date", startOfTomorrow().toISOString())
-      .limit(1),
-    "buscar el registro de hoy"
-  );
-
-  if (existing?.length) {
-    return run(
-      supabase.from("habit_logs").update({ ...fields, updated_at: nowISO() }).eq("id", existing[0].id),
-      "guardar el hábito"
-    );
-  }
-
-  return run(
-    supabase.from("habit_logs").insert({
-      habit_id: habitId,
-      date: today.toISOString(),
-      is_completed: false,
-      ...fields,
-      updated_at: nowISO(),
-    }),
-    "guardar el hábito"
-  );
+  const existing = logForToday(await store.all("habit_logs"), habitId);
+  if (existing) return store.update("habit_logs", existing.id, fields);
+  return store.insert("habit_logs", {
+    habit_id: habitId,
+    date: startOfToday().toISOString(),
+    is_completed: false,
+    ...fields,
+  });
 }
 
 $("habit-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const numeric = $("habit-kind").value === "numeric";
-  await run(
-    supabase.from("habits").insert({
-      name: $("habit-name").value.trim(),
-      symbol_name: "checkmark.circle.fill",
-      kind: $("habit-kind").value,
-      target_value: numeric ? Number($("habit-target").value) || null : null,
-      goal_direction: numeric ? $("habit-direction").value : "atLeast",
-      unit: numeric ? $("habit-unit").value.trim() || null : null,
-      is_active: true,
-      sort_order: 0,
-      linked_to_workouts: false,
-      updated_at: nowISO(),
-    }),
-    "guardar el hábito"
-  );
+  await store.insert("habits", {
+    name: $("habit-name").value.trim(),
+    symbol_name: "checkmark.circle.fill",
+    kind: $("habit-kind").value,
+    target_value: numeric ? Number($("habit-target").value) || null : null,
+    goal_direction: numeric ? $("habit-direction").value : "atLeast",
+    unit: numeric ? $("habit-unit").value.trim() || null : null,
+    is_active: true,
+    sort_order: 0,
+    linked_to_workouts: false,
+  });
   e.target.reset();
   syncHabitKindFields();
-  loadHabits();
 });
 
 // ── Medicación ──────────────────────────────────────────────────────
@@ -732,21 +684,13 @@ $("habit-form").addEventListener("submit", async (e) => {
 /** Cruza los horarios de cada medicamento con los registros de hoy —
  *  misma construcción que MedicationRepository.todaysDoses() en iOS. */
 async function todaysDoses() {
-  const meds =
-    (await run(
-      supabase.from("medications").select("*").eq("is_active", true).order("name"),
-      "cargar la medicación"
-    )) ?? [];
+  const meds = (await store.all("medications"))
+    .filter((m) => m.is_active)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
-  const logs =
-    (await run(
-      supabase
-        .from("medication_dose_logs")
-        .select("*")
-        .gte("date", startOfToday().toISOString())
-        .lt("date", startOfTomorrow().toISOString()),
-      "cargar las tomas"
-    )) ?? [];
+  const logs = (await store.all("medication_dose_logs")).filter((l) =>
+    sameDay(l.date, startOfToday())
+  );
 
   const doses = [];
   for (const med of meds) {
@@ -790,10 +734,9 @@ async function loadMedication() {
     : `<li class="empty">No tienes tomas programadas para hoy.</li>`;
 
   list.querySelectorAll("[data-dose]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
+    btn.addEventListener("click", () => {
       const d = doses[Number(btn.dataset.dose)];
-      await setDoseTaken(d, !d.taken);
-      loadMedication();
+      setDoseTaken(d, !d.taken);
     });
   });
 
@@ -817,29 +760,18 @@ async function loadMedication() {
         .join("")
     : `<li class="empty">Aún no has añadido ningún medicamento.</li>`;
 
-  // medication_dose_logs cae solo por el ON DELETE CASCADE del esquema.
-  wireDelete(medList, "medications", loadMedication, "eliminar el medicamento");
+  wireDelete(medList, "medications");
 }
 
-async function setDoseTaken(dose, taken) {
-  const fields = { taken_at: taken ? nowISO() : null, skipped: false, updated_at: nowISO() };
-
-  if (dose.logId) {
-    return run(
-      supabase.from("medication_dose_logs").update(fields).eq("id", dose.logId),
-      "guardar la toma"
-    );
-  }
-
-  return run(
-    supabase.from("medication_dose_logs").insert({
-      medication_id: dose.med.id,
-      date: startOfToday().toISOString(),
-      minute_of_day: dose.minute,
-      ...fields,
-    }),
-    "guardar la toma"
-  );
+function setDoseTaken(dose, taken) {
+  const fields = { taken_at: taken ? nowISO() : null, skipped: false };
+  if (dose.logId) return store.update("medication_dose_logs", dose.logId, fields);
+  return store.insert("medication_dose_logs", {
+    medication_id: dose.med.id,
+    date: startOfToday().toISOString(),
+    minute_of_day: dose.minute,
+    ...fields,
+  });
 }
 
 $("med-form").addEventListener("submit", async (e) => {
@@ -858,22 +790,20 @@ $("med-form").addEventListener("submit", async (e) => {
     .sort((a, b) => a - b);
 
   if (!minutes.length) {
-    showError("Escribe al menos una hora válida, por ejemplo 08:00 o 08:00, 20:00");
+    const b = $("sync-banner");
+    b.className = "banner";
+    b.textContent = "Escribe al menos una hora válida, por ejemplo 08:00 o 08:00, 20:00";
+    b.hidden = false;
     return;
   }
 
-  await run(
-    supabase.from("medications").insert({
-      name: $("med-name").value.trim(),
-      dosage: $("med-dosage").value.trim() || null,
-      reminder_minutes_since_midnight: minutes,
-      is_active: true,
-      updated_at: nowISO(),
-    }),
-    "guardar el medicamento"
-  );
+  await store.insert("medications", {
+    name: $("med-name").value.trim(),
+    dosage: $("med-dosage").value.trim() || null,
+    reminder_minutes_since_midnight: minutes,
+    is_active: true,
+  });
   e.target.reset();
-  loadMedication();
 });
 
 // ── Ajustes ─────────────────────────────────────────────────────────
@@ -894,44 +824,25 @@ async function loadSettings() {
   $("settings-email").textContent = data?.user?.email ?? "";
 }
 
-// Las tres tablas "singleton" (una fila por usuario) usan upsert por
-// user_id, igual que CloudSyncService.syncSingleton en iOS — así la web
-// y la app no crean dos filas distintas para lo mismo.
 $("goal-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  await run(
-    supabase.from("nutrition_goals").upsert(
-      {
-        user_id: (await supabase.auth.getUser()).data.user.id,
-        daily_calorie_goal: Number($("goal-calories").value) || 2000,
-        protein_goal_grams: Number($("goal-protein").value) || 0,
-        carbs_goal_grams: Number($("goal-carbs").value) || 0,
-        fat_goal_grams: Number($("goal-fat").value) || 0,
-        updated_at: nowISO(),
-      },
-      { onConflict: "user_id" }
-    ),
-    "guardar el objetivo"
-  );
+  await store.putSingleton("nutrition_goals", {
+    daily_calorie_goal: Number($("goal-calories").value) || 2000,
+    protein_goal_grams: Number($("goal-protein").value) || 0,
+    carbs_goal_grams: Number($("goal-carbs").value) || 0,
+    fat_goal_grams: Number($("goal-fat").value) || 0,
+  });
   showSaved($("goal-form"));
 });
 
 $("budget-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   currencyCode = $("budget-currency").value;
-  await run(
-    supabase.from("budget_settings").upsert(
-      {
-        user_id: (await supabase.auth.getUser()).data.user.id,
-        monthly_budget: Number($("budget-monthly").value) || 0,
-        total_savings: Number($("budget-savings").value) || 0,
-        currency_code: currencyCode,
-        updated_at: nowISO(),
-      },
-      { onConflict: "user_id" }
-    ),
-    "guardar el presupuesto"
-  );
+  await store.putSingleton("budget_settings", {
+    monthly_budget: Number($("budget-monthly").value) || 0,
+    total_savings: Number($("budget-savings").value) || 0,
+    currency_code: currencyCode,
+  });
   showSaved($("budget-form"));
 });
 
@@ -950,19 +861,17 @@ function showSaved(form) {
 // ── Inicio ──────────────────────────────────────────────────────────
 
 async function loadHome() {
-  const [entries, goal, budget, txs] = await Promise.all([
-    todaysFood(),
-    nutritionGoal(),
-    budgetSettings(),
-    monthTransactions(),
-  ]);
+  const entries = await todaysFood();
+  const goal = await nutritionGoal();
+  const budget = await budgetSettings();
+  const txs = await monthTransactions();
 
   // Anillo de calorías
-  const consumed = (entries ?? []).reduce((s, e) => s + (e.calories ?? 0), 0);
+  const consumed = entries.reduce((s, e) => s + (e.calories ?? 0), 0);
   const goalCal = goal?.daily_calorie_goal ?? 2000;
   $("home-calories").textContent = Math.round(goalCal - consumed);
   $("home-calories-detail").textContent =
-    `${Math.round(consumed)} de ${Math.round(goalCal)} kcal · ${(entries ?? []).length} comidas`;
+    `${Math.round(consumed)} de ${Math.round(goalCal)} kcal · ${entries.length} comidas`;
 
   const ratio = goalCal > 0 ? Math.min(1, consumed / goalCal) : 0;
   const ring = $("ring-progress");
@@ -971,7 +880,7 @@ async function loadHome() {
   ring.classList.toggle("is-over", consumed > goalCal);
 
   // Macros
-  const sum = (key) => (entries ?? []).reduce((s, e) => s + (e[key] ?? 0), 0);
+  const sum = (key) => entries.reduce((s, e) => s + (e[key] ?? 0), 0);
   const macros = [
     { name: "Proteína", got: sum("protein_grams"), target: goal?.protein_goal_grams ?? 0 },
     { name: "Carbos", got: sum("carbs_grams"), target: goal?.carbs_goal_grams ?? 0 },
@@ -1000,7 +909,7 @@ async function loadHome() {
   $("home-habits-bar").style.width = habits.length ? `${(met / habits.length) * 100}%` : "0%";
 
   // Presupuesto
-  const spent = (txs ?? []).filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  const spent = txs.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
   const monthly = budget?.monthly_budget ?? 0;
   $("home-available").textContent = money(Math.max(0, monthly - spent));
   $("home-available-detail").textContent = `${money(spent)} gastado de ${money(monthly)}`;
@@ -1009,20 +918,12 @@ async function loadHome() {
   budgetBar.classList.toggle("is-over", spent > monthly);
 
   // Próxima tarea
-  const next =
-    (await run(
-      supabase
-        .from("planner_tasks")
-        .select("*")
-        .eq("is_completed", false)
-        .not("due_date", "is", null)
-        .gte("due_date", startOfToday().toISOString())
-        .order("due_date", { ascending: true })
-        .limit(1),
-      "cargar tu próxima tarea"
-    )) ?? [];
-  $("home-next").textContent = next[0]?.title ?? "Nada pendiente";
-  $("home-next-detail").textContent = next[0]?.due_date ? dayOf(next[0].due_date) : "";
+  const today = startOfToday();
+  const next = (await store.all("planner_tasks"))
+    .filter((t) => !t.is_completed && t.due_date && new Date(t.due_date) >= today)
+    .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))[0];
+  $("home-next").textContent = next?.title ?? "Nada pendiente";
+  $("home-next-detail").textContent = next?.due_date ? dayOf(next.due_date) : "";
 
   // Próxima toma
   const { doses } = await todaysDoses();
@@ -1057,7 +958,8 @@ async function showApp() {
   $("side-email").textContent = email;
   $("side-avatar").textContent = email.charAt(0) || "·";
 
-  go("home");
+  go("home");        // pinta ya, desde lo que haya en local
+  store.sync();      // y actualiza por detrás
 }
 
 buildNav();

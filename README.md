@@ -554,9 +554,13 @@ Finanzas y Hábitos. Pensada para el iPad del cole (que solo permite
 páginas web) y para cualquier Android sin instalar nada, y preparada para
 "Añadir a pantalla de inicio" como si fuera una app.
 
-A diferencia de iOS, **no guarda nada en local**: lee y escribe directo
-contra Postgres, así que necesita conexión. Ver `web/README.md` para
-ponerla en marcha y para publicarla en un Synology con Web Station.
+Misma arquitectura que iOS: **los datos viven en el dispositivo**
+(IndexedDB, vía `web/store.js`) y la nube es la copia que los iguala en
+todos lados, con la misma regla de "gana el más reciente" y la misma
+propagación de borrados. Un service worker (`web/sw.js`) cachea los
+archivos de la app, así que arranca al instante y sigue funcionando sin
+conexión o con el NAS apagado. Ver `web/README.md` para ponerla en marcha
+y para publicarla en un Synology con Web Station.
 
 ## Lo mejor de las apps mejor valoradas, adaptado a Habitium
 
