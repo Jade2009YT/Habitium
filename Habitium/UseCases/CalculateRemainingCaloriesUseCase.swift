@@ -15,7 +15,12 @@ struct NutritionDailyProgress: Equatable {
     var goalMacros: Macronutrients
 
     var remainingCalories: Double { max(0, goalCalories - consumedCalories) }
+    /// Limitado a 1.0 — para barras que no deben desbordarse.
     var progress: Double { goalCalories > 0 ? min(consumedCalories / goalCalories, 1.0) : 0 }
+    /// SIN limitar: pasa de 1.0 al exceder el objetivo. Lo usan los
+    /// controles que cambian de color al pasarse (RingProgress,
+    /// ProgressBar), que con el valor limitado nunca se enterarían.
+    var rawProgress: Double { goalCalories > 0 ? consumedCalories / goalCalories : 0 }
     var isOverGoal: Bool { consumedCalories > goalCalories }
 }
 

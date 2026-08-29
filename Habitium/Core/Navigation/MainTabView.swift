@@ -37,6 +37,10 @@ struct MainTabView: View {
                 .tabItem { Label("Finanzas", systemImage: "chart.pie.fill") }
                 .tag(AppTab.finance)
         }
+        // El verde de la marca en la pestaña activa, en vez del azul por
+        // defecto de iOS — es lo primero que se ve y lo que hace que la
+        // app parezca suya y no una plantilla.
+        .tint(Theme.Colors.nutrition)
         .onChange(of: deepLinkCoordinator.pendingLink) { _, newValue in
             switch newValue {
             case .scanFood: selectedTab = .nutrition

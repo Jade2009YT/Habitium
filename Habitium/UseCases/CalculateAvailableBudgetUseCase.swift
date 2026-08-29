@@ -14,7 +14,12 @@ struct FinanceOverview: Equatable {
     var totalSavings: Double
     var currencyCode: String
 
+    /// Limitado a 1.0 — para barras que no deben desbordarse.
     var spentProgress: Double { monthlyBudget > 0 ? min(monthlySpent / monthlyBudget, 1.0) : 0 }
+    /// SIN limitar: pasa de 1.0 al exceder el presupuesto. Lo usan los
+    /// controles que cambian de color al pasarse, que con el valor
+    /// limitado nunca se enterarían.
+    var rawSpentProgress: Double { monthlyBudget > 0 ? monthlySpent / monthlyBudget : 0 }
     var isOverBudget: Bool { monthlySpent > monthlyBudget }
 }
 
