@@ -72,13 +72,25 @@ propio icono. No es una app nativa, pero se comporta casi igual.
 
 - Registro e inicio de sesión por email (Supabase Auth), con verificación
   de correo y recuperación de contraseña.
-- Inicio con las cuatro métricas del día (calorías, hábitos, próxima tarea,
-  disponible del mes).
-- Nutrición: registrar comidas con calorías y macros, ver las de hoy.
-- Agenda: crear tareas con fecha, completarlas, borrarlas.
-- Finanzas: registrar ingresos y gastos por categoría, ver los del mes.
-- Hábitos: crear hábitos de sí/no o numéricos con objetivo, marcarlos y ver
-  la racha — con la misma regla de racha que la app de iPhone.
+- **Inicio**: anillo de calorías con macros, hábitos cumplidos, presupuesto
+  disponible, próxima tarea y próxima toma de medicación.
+- **Nutrición**: registrar comidas con calorías y macros, ver las de hoy.
+- **Agenda**: crear tareas con fecha, completarlas, borrarlas (marca las
+  vencidas).
+- **Finanzas**: ingresos/gastos por categoría, resumen del mes y desglose
+  visual por categoría.
+- **Hábitos**: de sí/no o numéricos con objetivo, plantillas rápidas,
+  marcado diario y racha — con la misma regla de racha que la app de iPhone.
+- **Medicación**: medicamentos con varios horarios al día y marcado de las
+  tomas de hoy.
+- **Ajustes**: objetivo de calorías y macros, presupuesto mensual, ahorro y
+  moneda. Sin esto, Inicio se quedaría con los valores por defecto para
+  siempre.
+
+La interfaz se adapta: barra lateral en pantalla grande, pestañas abajo en
+el móvil. En el móvil las pestañas son las cinco principales (las mismas
+que en iOS); Medicación y Ajustes se alcanzan desde las tarjetas de Inicio
+o desde el escritorio.
 
 **No, a propósito:**
 

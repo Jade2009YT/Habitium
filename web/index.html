@@ -6,7 +6,6 @@
   <title>Habitium</title>
   <meta name="description" content="Tu cuidado personal, todo en un solo lugar.">
 
-  <!-- Añadir a pantalla de inicio: se abre sin barra del navegador, como una app. -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Habitium">
@@ -19,19 +18,19 @@
 </head>
 <body>
 
-<!-- Pantalla de carga: se queda hasta que sabemos si hay sesión o no, para
-     no enseñar el login por un instante a alguien que ya está dentro. -->
 <div id="boot" class="boot">
-  <div class="leaf-mark" aria-hidden="true"></div>
-  <p class="boot-text">Cargando…</p>
+  <div class="leaf" aria-hidden="true"></div>
+  <p>Cargando…</p>
 </div>
 
-<!-- ───────────────────────────── Login ───────────────────────────── -->
-<main id="auth-screen" class="auth-screen" hidden>
-  <div class="auth-card">
-    <div class="leaf-mark" aria-hidden="true"></div>
-    <h1>Habitium</h1>
-    <p class="subtitle">Tu cuidado personal, todo en un solo lugar.</p>
+<!-- ═══════════════════════════ Login ═══════════════════════════ -->
+<main id="auth-screen" class="auth" hidden>
+  <div class="auth-panel">
+    <div class="auth-brand">
+      <div class="leaf" aria-hidden="true"></div>
+      <h1>Habitium</h1>
+      <p>Tu cuidado personal, todo en un solo lugar.</p>
+    </div>
 
     <div class="segmented" role="tablist">
       <button id="tab-signin" class="segment is-active" role="tab" type="button">Iniciar sesión</button>
@@ -47,157 +46,283 @@
         <span>Contraseña</span>
         <input id="auth-password" type="password" required autocomplete="current-password" minlength="6" placeholder="Mínimo 6 caracteres">
       </label>
-      <button id="auth-submit" class="btn btn-primary btn-block" type="submit">Iniciar sesión</button>
+      <button id="auth-submit" class="btn btn-primary btn-lg btn-block" type="submit">Iniciar sesión</button>
     </form>
 
     <button id="forgot-password" class="btn-link" type="button">¿Has olvidado tu contraseña?</button>
     <p id="auth-message" class="auth-message" role="status"></p>
-
-    <p class="fineprint">
-      Tus datos se guardan de forma privada en tu cuenta. Nadie más puede
-      verlos: cada consulta está limitada a tu propio usuario.
-    </p>
   </div>
+
+  <aside class="auth-aside" aria-hidden="true">
+    <h2>Todo tu día, en un solo sitio</h2>
+    <ul class="auth-points">
+      <li><span>🍎</span><div><strong>Nutrición</strong>Calorías y macros, con objetivo diario.</div></li>
+      <li><span>📅</span><div><strong>Agenda</strong>Tareas y fechas, sin perderte nada.</div></li>
+      <li><span>💶</span><div><strong>Finanzas</strong>Gastos por categoría y presupuesto.</div></li>
+      <li><span>✅</span><div><strong>Hábitos</strong>Rachas que te enganchan a seguir.</div></li>
+      <li><span>💊</span><div><strong>Medicación</strong>Tus tomas del día, controladas.</div></li>
+    </ul>
+    <p class="auth-fine">Tus datos son privados: cada consulta está limitada a tu propia cuenta.</p>
+  </aside>
 </main>
 
-<!-- ───────────────────────────── App ───────────────────────────── -->
-<div id="app" class="app" hidden>
-  <header class="app-header">
-    <div class="leaf-mark leaf-mark-sm" aria-hidden="true"></div>
-    <h1>Habitium</h1>
-    <button id="sign-out" class="btn-icon" type="button" title="Cerrar sesión" aria-label="Cerrar sesión">⏻</button>
-  </header>
+<!-- ═══════════════════════════ App ═══════════════════════════ -->
+<div id="app" class="shell" hidden>
 
-  <div id="sync-banner" class="sync-banner" hidden role="status"></div>
-
-  <!-- Inicio -->
-  <section id="view-home" class="view">
-    <div class="cards">
-      <article class="card card-nutrition">
-        <h2>Calorías de hoy</h2>
-        <p class="metric"><span id="home-calories">—</span> <small>kcal restantes</small></p>
-        <div class="bar"><div id="home-calories-bar" class="bar-fill"></div></div>
-        <p class="muted" id="home-calories-detail"></p>
-      </article>
-
-      <article class="card card-habits">
-        <h2>Hábitos de hoy</h2>
-        <p class="metric"><span id="home-habits">—</span></p>
-        <p class="muted" id="home-habits-detail"></p>
-      </article>
-
-      <article class="card card-planner">
-        <h2>Próximo</h2>
-        <p class="metric-sm" id="home-next">—</p>
-        <p class="muted" id="home-next-detail"></p>
-      </article>
-
-      <article class="card card-finance">
-        <h2>Disponible este mes</h2>
-        <p class="metric"><span id="home-available">—</span></p>
-        <p class="muted" id="home-available-detail"></p>
-      </article>
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="leaf leaf-sm" aria-hidden="true"></div>
+      <span>Habitium</span>
     </div>
-  </section>
-
-  <!-- Nutrición -->
-  <section id="view-nutrition" class="view" hidden>
-    <form id="food-form" class="inline-form">
-      <input id="food-name" type="text" placeholder="Qué has comido" required>
-      <input id="food-calories" type="number" placeholder="kcal" min="0" step="1" required>
-      <select id="food-meal">
-        <option value="breakfast">Desayuno</option>
-        <option value="lunch">Almuerzo</option>
-        <option value="dinner">Cena</option>
-        <option value="snack">Snack</option>
-      </select>
-      <button class="btn btn-primary" type="submit">Añadir</button>
-    </form>
-    <details class="macros-details">
-      <summary>Macros (opcional)</summary>
-      <div class="macro-row">
-        <label class="field"><span>Proteína (g)</span><input id="food-protein" type="number" min="0" step="0.1"></label>
-        <label class="field"><span>Carbos (g)</span><input id="food-carbs" type="number" min="0" step="0.1"></label>
-        <label class="field"><span>Grasas (g)</span><input id="food-fat" type="number" min="0" step="0.1"></label>
+    <nav class="side-nav" id="side-nav" role="tablist"></nav>
+    <div class="sidebar-foot">
+      <div class="who">
+        <div class="avatar" id="side-avatar">·</div>
+        <span id="side-email" class="who-email"></span>
       </div>
-    </details>
-    <h2 class="section-title">Hoy</h2>
-    <ul id="food-list" class="list"></ul>
-  </section>
+      <button id="sign-out" class="btn btn-ghost btn-sm btn-block" type="button">Cerrar sesión</button>
+    </div>
+  </aside>
 
-  <!-- Planner -->
-  <section id="view-planner" class="view" hidden>
-    <form id="task-form" class="inline-form">
-      <input id="task-title" type="text" placeholder="Nueva tarea" required>
-      <input id="task-due" type="date">
-      <button class="btn btn-primary" type="submit">Añadir</button>
-    </form>
-    <h2 class="section-title">Pendientes</h2>
-    <ul id="task-list" class="list"></ul>
-    <h2 class="section-title">Completadas</h2>
-    <ul id="task-done-list" class="list list-muted"></ul>
-  </section>
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <p class="topbar-date" id="topbar-date"></p>
+        <h1 class="topbar-title" id="topbar-title">Inicio</h1>
+      </div>
+      <button id="refresh" class="btn btn-ghost btn-sm" type="button" title="Actualizar">↻</button>
+    </header>
 
-  <!-- Finanzas -->
-  <section id="view-finance" class="view" hidden>
-    <form id="tx-form" class="inline-form">
-      <input id="tx-amount" type="number" placeholder="Importe" min="0" step="0.01" required>
-      <select id="tx-type">
-        <option value="expense">Gasto</option>
-        <option value="income">Ingreso</option>
-      </select>
-      <select id="tx-category">
-        <option value="food">Comida</option>
-        <option value="leisure">Ocio</option>
-        <option value="savings">Ahorro</option>
-        <option value="services">Servicios</option>
-        <option value="transport">Transporte</option>
-        <option value="health">Salud</option>
-        <option value="salary">Salario</option>
-        <option value="other">Otro</option>
-      </select>
-      <input id="tx-note" type="text" placeholder="Nota (opcional)">
-      <button class="btn btn-primary" type="submit">Añadir</button>
-    </form>
-    <h2 class="section-title">Este mes</h2>
-    <ul id="tx-list" class="list"></ul>
-  </section>
+    <div id="sync-banner" class="banner" hidden role="status"></div>
 
-  <!-- Hábitos -->
-  <section id="view-habits" class="view" hidden>
-    <form id="habit-form" class="inline-form">
-      <input id="habit-name" type="text" placeholder="Nuevo hábito" required>
-      <select id="habit-kind">
-        <option value="checkbox">Sí / No</option>
-        <option value="numeric">Número con objetivo</option>
-      </select>
-      <input id="habit-target" type="number" placeholder="Objetivo" min="0" step="0.1" hidden>
-      <select id="habit-direction" hidden>
-        <option value="atLeast">Como mínimo</option>
-        <option value="atMost">Como máximo</option>
-      </select>
-      <input id="habit-unit" type="text" placeholder="Unidad (h, vasos…)" hidden>
-      <button class="btn btn-primary" type="submit">Añadir</button>
-    </form>
-    <h2 class="section-title">Hoy</h2>
-    <ul id="habit-list" class="list"></ul>
-  </section>
+    <!-- ─────────── Inicio ─────────── -->
+    <section id="view-home" class="view">
+      <div class="grid grid-home">
+        <article class="card card-hero is-link" data-view="nutrition" role="button" tabindex="0">
+          <div class="ring-wrap">
+            <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="ring-track" cx="60" cy="60" r="52"></circle>
+              <circle id="ring-progress" class="ring-progress" cx="60" cy="60" r="52"></circle>
+            </svg>
+            <div class="ring-center">
+              <strong id="home-calories">—</strong>
+              <span>kcal restantes</span>
+            </div>
+          </div>
+          <div class="hero-side">
+            <h2>Nutrición de hoy</h2>
+            <p class="hero-detail" id="home-calories-detail">—</p>
+            <div class="macros" id="home-macros"></div>
+          </div>
+        </article>
 
-  <nav class="tabbar" role="tablist">
-    <button class="tab is-active" data-view="home" type="button"><span aria-hidden="true">🏠</span>Inicio</button>
-    <button class="tab" data-view="nutrition" type="button"><span aria-hidden="true">🍎</span>Nutrición</button>
-    <button class="tab" data-view="planner" type="button"><span aria-hidden="true">📅</span>Agenda</button>
-    <button class="tab" data-view="finance" type="button"><span aria-hidden="true">💶</span>Finanzas</button>
-    <button class="tab" data-view="habits" type="button"><span aria-hidden="true">✅</span>Hábitos</button>
-  </nav>
+        <article class="card accent-purple is-link" data-view="habits" role="button" tabindex="0">
+          <h2>Hábitos de hoy</h2>
+          <p class="stat" id="home-habits">—</p>
+          <p class="stat-sub" id="home-habits-detail"></p>
+          <div class="track"><div id="home-habits-bar" class="track-fill purple"></div></div>
+        </article>
+
+        <article class="card accent-orange is-link" data-view="finance" role="button" tabindex="0">
+          <h2>Disponible este mes</h2>
+          <p class="stat" id="home-available">—</p>
+          <p class="stat-sub" id="home-available-detail"></p>
+          <div class="track"><div id="home-budget-bar" class="track-fill orange"></div></div>
+        </article>
+
+        <article class="card accent-blue is-link" data-view="planner" role="button" tabindex="0">
+          <h2>Próxima tarea</h2>
+          <p class="stat-text" id="home-next">—</p>
+          <p class="stat-sub" id="home-next-detail"></p>
+        </article>
+
+        <article class="card accent-pink is-link" data-view="medication" role="button" tabindex="0">
+          <h2>Próxima toma</h2>
+          <p class="stat-text" id="home-dose">—</p>
+          <p class="stat-sub" id="home-dose-detail"></p>
+        </article>
+      </div>
+
+      <!-- En móvil la barra de pestañas solo lleva 5 destinos, así que
+           Ajustes necesita su propia salida desde aquí. -->
+      <button class="settings-link is-link" data-view="settings" type="button">
+        <span aria-hidden="true">⚙️</span> Ajustes · objetivos, presupuesto y cuenta
+      </button>
+    </section>
+
+    <!-- ─────────── Nutrición ─────────── -->
+    <section id="view-nutrition" class="view" hidden>
+      <form id="food-form" class="composer">
+        <div class="composer-row">
+          <input id="food-name" type="text" placeholder="¿Qué has comido?" required>
+          <input id="food-calories" class="w-sm" type="number" placeholder="kcal" min="0" step="1" required>
+          <select id="food-meal" class="w-md">
+            <option value="breakfast">Desayuno</option>
+            <option value="lunch">Almuerzo</option>
+            <option value="dinner">Cena</option>
+            <option value="snack">Snack</option>
+          </select>
+          <button class="btn btn-primary" type="submit">Añadir</button>
+        </div>
+        <details class="composer-extra">
+          <summary>Macros (opcional)</summary>
+          <div class="composer-row">
+            <input id="food-protein" type="number" placeholder="Proteína (g)" min="0" step="0.1">
+            <input id="food-carbs" type="number" placeholder="Carbos (g)" min="0" step="0.1">
+            <input id="food-fat" type="number" placeholder="Grasas (g)" min="0" step="0.1">
+          </div>
+        </details>
+      </form>
+      <h2 class="section-title">Hoy <span id="food-total" class="pill"></span></h2>
+      <ul id="food-list" class="list"></ul>
+    </section>
+
+    <!-- ─────────── Agenda ─────────── -->
+    <section id="view-planner" class="view" hidden>
+      <form id="task-form" class="composer">
+        <div class="composer-row">
+          <input id="task-title" type="text" placeholder="Nueva tarea" required>
+          <input id="task-due" class="w-md" type="date">
+          <button class="btn btn-primary" type="submit">Añadir</button>
+        </div>
+      </form>
+      <h2 class="section-title">Pendientes <span id="task-count" class="pill"></span></h2>
+      <ul id="task-list" class="list"></ul>
+      <h2 class="section-title">Completadas</h2>
+      <ul id="task-done-list" class="list is-dim"></ul>
+    </section>
+
+    <!-- ─────────── Finanzas ─────────── -->
+    <section id="view-finance" class="view" hidden>
+      <div class="grid grid-3">
+        <article class="card compact accent-green">
+          <h2>Ingresos</h2><p class="stat-sm" id="fin-income">—</p>
+        </article>
+        <article class="card compact accent-red">
+          <h2>Gastos</h2><p class="stat-sm" id="fin-expense">—</p>
+        </article>
+        <article class="card compact accent-orange">
+          <h2>Disponible</h2><p class="stat-sm" id="fin-available">—</p>
+        </article>
+      </div>
+
+      <form id="tx-form" class="composer">
+        <div class="composer-row">
+          <input id="tx-amount" class="w-sm" type="number" placeholder="Importe" min="0" step="0.01" required>
+          <select id="tx-type" class="w-sm">
+            <option value="expense">Gasto</option>
+            <option value="income">Ingreso</option>
+          </select>
+          <select id="tx-category" class="w-md">
+            <option value="food">Comida</option>
+            <option value="leisure">Ocio</option>
+            <option value="savings">Ahorro</option>
+            <option value="services">Servicios</option>
+            <option value="transport">Transporte</option>
+            <option value="health">Salud</option>
+            <option value="salary">Salario</option>
+            <option value="other">Otro</option>
+          </select>
+          <input id="tx-note" type="text" placeholder="Nota (opcional)">
+          <button class="btn btn-primary" type="submit">Añadir</button>
+        </div>
+      </form>
+
+      <h2 class="section-title">Por categoría</h2>
+      <div id="fin-categories" class="cat-bars"></div>
+
+      <h2 class="section-title">Movimientos del mes</h2>
+      <ul id="tx-list" class="list"></ul>
+    </section>
+
+    <!-- ─────────── Hábitos ─────────── -->
+    <section id="view-habits" class="view" hidden>
+      <form id="habit-form" class="composer">
+        <div class="composer-row">
+          <input id="habit-name" type="text" placeholder="Nuevo hábito" required>
+          <select id="habit-kind" class="w-md">
+            <option value="checkbox">Sí / No</option>
+            <option value="numeric">Número con objetivo</option>
+          </select>
+          <input id="habit-target" class="w-sm" type="number" placeholder="Objetivo" min="0" step="0.1" hidden>
+          <select id="habit-direction" class="w-md" hidden>
+            <option value="atLeast">Como mínimo</option>
+            <option value="atMost">Como máximo</option>
+          </select>
+          <input id="habit-unit" class="w-sm" type="text" placeholder="Unidad" hidden>
+          <button class="btn btn-primary" type="submit">Añadir</button>
+        </div>
+        <div class="chips" id="habit-templates"></div>
+      </form>
+      <h2 class="section-title">Hoy</h2>
+      <ul id="habit-list" class="list"></ul>
+    </section>
+
+    <!-- ─────────── Medicación ─────────── -->
+    <section id="view-medication" class="view" hidden>
+      <form id="med-form" class="composer">
+        <div class="composer-row">
+          <input id="med-name" type="text" placeholder="Medicamento" required>
+          <input id="med-dosage" class="w-md" type="text" placeholder="Dosis (ej: 1 pastilla)">
+          <input id="med-times" class="w-md" type="text" placeholder="Horas: 08:00, 20:00" required>
+          <button class="btn btn-primary" type="submit">Añadir</button>
+        </div>
+        <p class="composer-hint">Separa varias horas con comas. Formato 24 h.</p>
+      </form>
+      <h2 class="section-title">Tomas de hoy</h2>
+      <ul id="dose-list" class="list"></ul>
+      <h2 class="section-title">Tus medicamentos</h2>
+      <ul id="med-list" class="list is-dim"></ul>
+    </section>
+
+    <!-- ─────────── Ajustes ─────────── -->
+    <section id="view-settings" class="view" hidden>
+      <form id="goal-form" class="card form-card">
+        <h2>Objetivo diario de nutrición</h2>
+        <div class="form-grid">
+          <label class="field"><span>Calorías (kcal)</span><input id="goal-calories" type="number" min="0" step="10"></label>
+          <label class="field"><span>Proteína (g)</span><input id="goal-protein" type="number" min="0" step="1"></label>
+          <label class="field"><span>Carbohidratos (g)</span><input id="goal-carbs" type="number" min="0" step="1"></label>
+          <label class="field"><span>Grasas (g)</span><input id="goal-fat" type="number" min="0" step="1"></label>
+        </div>
+        <button class="btn btn-primary" type="submit">Guardar objetivo</button>
+      </form>
+
+      <form id="budget-form" class="card form-card">
+        <h2>Presupuesto</h2>
+        <div class="form-grid">
+          <label class="field"><span>Presupuesto mensual</span><input id="budget-monthly" type="number" min="0" step="10"></label>
+          <label class="field"><span>Ahorro total</span><input id="budget-savings" type="number" min="0" step="10"></label>
+          <label class="field"><span>Moneda</span>
+            <select id="budget-currency">
+              <option value="EUR">Euro (€)</option>
+              <option value="USD">Dólar ($)</option>
+              <option value="GBP">Libra (£)</option>
+              <option value="MXN">Peso mexicano</option>
+              <option value="ARS">Peso argentino</option>
+              <option value="COP">Peso colombiano</option>
+            </select>
+          </label>
+        </div>
+        <button class="btn btn-primary" type="submit">Guardar presupuesto</button>
+      </form>
+
+      <div class="card form-card">
+        <h2>Cuenta</h2>
+        <p class="muted" id="settings-email"></p>
+        <button id="sign-out-2" class="btn btn-ghost" type="button">Cerrar sesión</button>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabbar" id="tabbar" role="tablist"></nav>
 </div>
 
-<!-- Aviso si config.js falta o sigue con los valores de ejemplo. -->
-<div id="config-error" class="config-error" hidden>
-  <div class="auth-card">
+<div id="config-error" class="auth" hidden>
+  <div class="auth-panel">
     <h1>Falta configurar Supabase</h1>
-    <p>Copia <code>config.example.js</code> a <code>config.js</code> y pon dentro
-       la URL y la <em>anon key</em> de tu proyecto de Supabase.</p>
+    <p class="muted">Copia <code>config.example.js</code> a <code>config.js</code> y pon dentro la
+       URL del proyecto y la clave pública.</p>
     <p class="muted">Están en supabase.com → tu proyecto → Project Settings → API.</p>
   </div>
 </div>

@@ -44,51 +44,51 @@ const startOfToday = () => {
   d.setHours(0, 0, 0, 0);
   return d;
 };
-
 const startOfTomorrow = () => {
   const d = startOfToday();
   d.setDate(d.getDate() + 1);
   return d;
 };
-
 const startOfMonth = () => {
   const d = new Date();
   return new Date(d.getFullYear(), d.getMonth(), 1);
 };
-
 const startOfNextMonth = () => {
   const d = new Date();
   return new Date(d.getFullYear(), d.getMonth() + 1, 1);
 };
-
 const nowISO = () => new Date().toISOString();
 
-/** El estado de UserSettings.currencyCode manda; hasta que carga, EUR. */
+/** Lo fija budget_settings.currency_code al cargar; hasta entonces, EUR. */
 let currencyCode = "EUR";
-const money = (value) =>
-  new Intl.NumberFormat("es-ES", { style: "currency", currency: currencyCode }).format(value ?? 0);
+const money = (v) =>
+  new Intl.NumberFormat("es-ES", {
+    style: "currency",
+    currency: currencyCode,
+    maximumFractionDigits: 2,
+  }).format(v ?? 0);
 
 const timeOf = (iso) =>
   new Date(iso).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
-
 const dayOf = (iso) =>
   new Date(iso).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 
+/** "8:00" a partir de minutos desde medianoche (formato de iOS). */
+const minutesToTime = (m) =>
+  `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
 /** Escapa texto del usuario antes de meterlo en innerHTML. */
-const esc = (str) =>
-  String(str ?? "").replace(/[&<>"']/g, (c) =>
+const esc = (s) =>
+  String(s ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
   );
 
-function showError(message) {
-  const banner = $("sync-banner");
-  banner.textContent = message;
-  banner.hidden = false;
+function showError(msg) {
+  const b = $("sync-banner");
+  b.textContent = msg;
+  b.hidden = false;
 }
-
-function clearError() {
-  $("sync-banner").hidden = true;
-}
+const clearError = () => ($("sync-banner").hidden = true);
 
 /** Envuelve una consulta: devuelve los datos, o enseña el error y null. */
 async function run(promise, what) {
@@ -125,8 +125,8 @@ function setAuthMessage(text, ok = false) {
 $("tab-signin").addEventListener("click", () => setAuthMode("signin"));
 $("tab-signup").addEventListener("click", () => setAuthMode("signup"));
 
-$("auth-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
+$("auth-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
   const email = $("auth-email").value.trim();
   const password = $("auth-password").value;
   const submit = $("auth-submit");
@@ -140,14 +140,10 @@ $("auth-form").addEventListener("submit", async (event) => {
       : await supabase.auth.signInWithPassword({ email, password });
 
   submit.disabled = false;
+  if (error) return setAuthMessage(error.message);
 
-  if (error) {
-    setAuthMessage(error.message);
-    return;
-  }
-
-  // Con "Confirm email" activado (el ajuste por defecto de Supabase), el
-  // registro no devuelve sesión hasta que se abre el enlace del correo.
+  // Con "Confirm email" activo (el ajuste por defecto de Supabase), el
+  // registro no devuelve sesión hasta abrir el enlace del correo.
   if (authMode === "signup" && !data.session) {
     setAuthMessage(`Te hemos enviado un enlace a ${email}. Ábrelo y vuelve aquí.`, true);
   }
@@ -155,10 +151,7 @@ $("auth-form").addEventListener("submit", async (event) => {
 
 $("forgot-password").addEventListener("click", async () => {
   const email = $("auth-email").value.trim();
-  if (!email) {
-    setAuthMessage("Escribe tu correo primero.");
-    return;
-  }
+  if (!email) return setAuthMessage("Escribe tu correo primero.");
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: window.location.href,
   });
@@ -168,42 +161,100 @@ $("forgot-password").addEventListener("click", async () => {
   );
 });
 
-$("sign-out").addEventListener("click", async () => {
-  await supabase.auth.signOut();
-});
+const doSignOut = () => supabase.auth.signOut();
+$("sign-out").addEventListener("click", doSignOut);
+$("sign-out-2").addEventListener("click", doSignOut);
 
-// ── Navegación por pestañas ─────────────────────────────────────────
+// ── Navegación ──────────────────────────────────────────────────────
 
-const VIEWS = ["home", "nutrition", "planner", "finance", "habits"];
+const NAV = [
+  { id: "home", label: "Inicio", icon: "🏠" },
+  { id: "nutrition", label: "Nutrición", icon: "🍎" },
+  { id: "planner", label: "Agenda", icon: "📅" },
+  { id: "finance", label: "Finanzas", icon: "💶" },
+  { id: "habits", label: "Hábitos", icon: "✅" },
+  { id: "medication", label: "Medicación", icon: "💊" },
+  { id: "settings", label: "Ajustes", icon: "⚙️" },
+];
 
-document.querySelectorAll(".tab").forEach((tab) => {
-  tab.addEventListener("click", () => {
-    const target = tab.dataset.view;
-    VIEWS.forEach((v) => ($(`view-${v}`).hidden = v !== target));
-    document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("is-active", t === tab));
-    refreshView(target);
+// La barra de pestañas del móvil no puede con 7 destinos sin quedar
+// ilegible; Medicación y Ajustes se alcanzan desde el escritorio o
+// desde las tarjetas. Las 5 principales son las mismas que en iOS.
+const MOBILE_TABS = ["home", "nutrition", "planner", "finance", "habits"];
+
+function buildNav() {
+  $("side-nav").innerHTML = NAV.map(
+    (n) => `<button class="side-item" data-view="${n.id}" type="button" role="tab">
+              <span aria-hidden="true">${n.icon}</span>${n.label}
+            </button>`
+  ).join("");
+
+  $("tabbar").innerHTML = NAV.filter((n) => MOBILE_TABS.includes(n.id))
+    .map(
+      (n) => `<button class="tab" data-view="${n.id}" type="button" role="tab">
+                <span aria-hidden="true">${n.icon}</span>${n.label}
+              </button>`
+    )
+    .join("");
+
+  // Cubre la barra lateral, las pestañas, las tarjetas de Inicio y el
+  // enlace a Ajustes — todos usan el mismo atributo data-view.
+  document.querySelectorAll("[data-view]").forEach((el) => {
+    el.addEventListener("click", () => go(el.dataset.view));
+    // Las tarjetas son <article role="button">, no <button>, así que el
+    // teclado no las activa solo.
+    if (el.getAttribute("role") === "button" && el.tagName !== "BUTTON") {
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          go(el.dataset.view);
+        }
+      });
+    }
   });
-});
+}
+
+let currentView = "home";
+
+function go(view) {
+  currentView = view;
+  NAV.forEach((n) => ($(`view-${n.id}`).hidden = n.id !== view));
+  document.querySelectorAll(".side-item").forEach((el) =>
+    el.classList.toggle("is-active", el.dataset.view === view)
+  );
+  document.querySelectorAll(".tab").forEach((el) =>
+    el.classList.toggle("is-active", el.dataset.view === view)
+  );
+  $("topbar-title").textContent = NAV.find((n) => n.id === view)?.label ?? "";
+  window.scrollTo({ top: 0 });
+  refreshView(view);
+}
 
 function refreshView(view) {
-  if (view === "home") return loadHome();
-  if (view === "nutrition") return loadNutrition();
-  if (view === "planner") return loadPlanner();
-  if (view === "finance") return loadFinance();
-  if (view === "habits") return loadHabits();
+  return {
+    home: loadHome,
+    nutrition: loadNutrition,
+    planner: loadPlanner,
+    finance: loadFinance,
+    habits: loadHabits,
+    medication: loadMedication,
+    settings: loadSettings,
+  }[view]?.();
 }
+
+$("refresh").addEventListener("click", () => refreshView(currentView));
 
 // ── Nutrición ───────────────────────────────────────────────────────
 
-const MEAL_NAMES = {
-  breakfast: "Desayuno",
-  lunch: "Almuerzo",
-  dinner: "Cena",
-  snack: "Snack",
+const MEALS = {
+  breakfast: { name: "Desayuno", icon: "🌅" },
+  lunch: { name: "Almuerzo", icon: "☀️" },
+  dinner: { name: "Cena", icon: "🌙" },
+  snack: { name: "Snack", icon: "🥕" },
 };
 
-async function todaysFood() {
-  return await run(
+const todaysFood = () =>
+  run(
     supabase
       .from("food_entries")
       .select("*")
@@ -212,21 +263,17 @@ async function todaysFood() {
       .order("date", { ascending: true }),
     "cargar las comidas"
   );
-}
 
-async function nutritionGoal() {
-  const rows = await run(
-    supabase.from("nutrition_goals").select("*").limit(1),
-    "cargar tu objetivo de calorías"
-  );
-  return rows?.[0] ?? null;
-}
+const nutritionGoal = async () =>
+  (await run(supabase.from("nutrition_goals").select("*").limit(1), "cargar tu objetivo"))?.[0] ?? null;
 
 async function loadNutrition() {
   const entries = (await todaysFood()) ?? [];
-  const list = $("food-list");
+  const total = entries.reduce((s, e) => s + (e.calories ?? 0), 0);
+  $("food-total").textContent = `${Math.round(total)} kcal`;
 
-  if (entries.length === 0) {
+  const list = $("food-list");
+  if (!entries.length) {
     list.innerHTML = `<li class="empty">Aún no has registrado nada hoy.</li>`;
     return;
   }
@@ -234,117 +281,120 @@ async function loadNutrition() {
   list.innerHTML = entries
     .map(
       (e) => `
-      <li class="row" data-id="${e.id}">
+      <li class="row">
+        <div class="row-icon">${MEALS[e.meal_type]?.icon ?? "🍽️"}</div>
         <div class="row-main">
           <div class="row-title">${esc(e.name)}</div>
-          <div class="row-sub">${MEAL_NAMES[e.meal_type] ?? ""} · ${timeOf(e.date)}
-            · P ${Math.round(e.protein_grams)}g · C ${Math.round(e.carbs_grams)}g · G ${Math.round(e.fat_grams)}g</div>
+          <div class="row-sub">
+            <span>${MEALS[e.meal_type]?.name ?? ""} · ${timeOf(e.date)}</span>
+            <span>P ${Math.round(e.protein_grams)} · C ${Math.round(e.carbs_grams)} · G ${Math.round(e.fat_grams)} g</span>
+          </div>
         </div>
         <div class="row-value">${Math.round(e.calories)} kcal</div>
-        <button class="delete" data-delete-food="${e.id}" title="Eliminar" aria-label="Eliminar">✕</button>
+        <button class="delete" data-del="${e.id}" title="Eliminar" aria-label="Eliminar">✕</button>
       </li>`
     )
     .join("");
 
-  list.querySelectorAll("[data-delete-food]").forEach((btn) => {
+  wireDelete(list, "food_entries", loadNutrition, "eliminar la comida");
+}
+
+$("food-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await run(
+    supabase.from("food_entries").insert({
+      name: $("food-name").value.trim(),
+      date: nowISO(),
+      meal_type: $("food-meal").value,
+      source: "manual",
+      calories: Number($("food-calories").value) || 0,
+      protein_grams: Number($("food-protein").value) || 0,
+      carbs_grams: Number($("food-carbs").value) || 0,
+      fat_grams: Number($("food-fat").value) || 0,
+      updated_at: nowISO(),
+    }),
+    "guardar la comida"
+  );
+  e.target.reset();
+  loadNutrition();
+});
+
+/** Cablea todos los botones .delete de una lista contra una tabla. */
+function wireDelete(list, table, reload, what) {
+  list.querySelectorAll("[data-del]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      await run(
-        supabase.from("food_entries").delete().eq("id", btn.dataset.deleteFood),
-        "eliminar la comida"
-      );
-      loadNutrition();
+      await run(supabase.from(table).delete().eq("id", btn.dataset.del), what);
+      reload();
     });
   });
 }
 
-$("food-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const payload = {
-    name: $("food-name").value.trim(),
-    date: nowISO(),
-    meal_type: $("food-meal").value,
-    source: "manual",
-    calories: Number($("food-calories").value) || 0,
-    protein_grams: Number($("food-protein").value) || 0,
-    carbs_grams: Number($("food-carbs").value) || 0,
-    fat_grams: Number($("food-fat").value) || 0,
-    updated_at: nowISO(),
-  };
-  await run(supabase.from("food_entries").insert(payload), "guardar la comida");
-  event.target.reset();
-  ["food-protein", "food-carbs", "food-fat"].forEach((id) => ($(id).value = ""));
-  loadNutrition();
-});
-
-// ── Planner ─────────────────────────────────────────────────────────
+// ── Agenda ──────────────────────────────────────────────────────────
 
 async function loadPlanner() {
   const tasks =
     (await run(
-      supabase.from("planner_tasks").select("*").order("due_date", { ascending: true, nullsFirst: false }),
+      supabase
+        .from("planner_tasks")
+        .select("*")
+        .order("due_date", { ascending: true, nullsFirst: false }),
       "cargar las tareas"
     )) ?? [];
 
   const pending = tasks.filter((t) => !t.is_completed);
-  const done = tasks.filter((t) => t.is_completed);
-
-  renderTasks($("task-list"), pending, "No tienes tareas pendientes.");
-  renderTasks($("task-done-list"), done, "Nada completado todavía.");
+  $("task-count").textContent = String(pending.length);
+  renderTasks($("task-list"), pending, "No tienes tareas pendientes. 🎉");
+  renderTasks($("task-done-list"), tasks.filter((t) => t.is_completed), "Nada completado todavía.");
 }
 
 function renderTasks(list, tasks, emptyText) {
-  if (tasks.length === 0) {
+  if (!tasks.length) {
     list.innerHTML = `<li class="empty">${emptyText}</li>`;
     return;
   }
 
+  const today = startOfToday().getTime();
   list.innerHTML = tasks
-    .map(
-      (t) => `
+    .map((t) => {
+      const overdue =
+        !t.is_completed && t.due_date && new Date(t.due_date).setHours(0, 0, 0, 0) < today;
+      return `
       <li class="row">
         <button class="check ${t.is_completed ? "is-checked" : ""}"
-                data-toggle-task="${t.id}" data-completed="${t.is_completed}"
+                data-toggle="${t.id}" data-done="${t.is_completed}"
                 aria-label="Marcar como completada">✓</button>
         <div class="row-main">
           <div class="row-title ${t.is_completed ? "is-done" : ""}">${esc(t.title)}</div>
-          ${t.due_date ? `<div class="row-sub">${dayOf(t.due_date)}</div>` : ""}
+          ${t.due_date ? `<div class="row-sub"><span>${overdue ? "⚠️ " : ""}${dayOf(t.due_date)}</span></div>` : ""}
         </div>
-        <button class="delete" data-delete-task="${t.id}" title="Eliminar" aria-label="Eliminar">✕</button>
-      </li>`
-    )
+        <button class="delete" data-del="${t.id}" title="Eliminar" aria-label="Eliminar">✕</button>
+      </li>`;
+    })
     .join("");
 
-  list.querySelectorAll("[data-toggle-task]").forEach((btn) => {
+  list.querySelectorAll("[data-toggle]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       await run(
         supabase
           .from("planner_tasks")
-          .update({ is_completed: btn.dataset.completed !== "true", updated_at: nowISO() })
-          .eq("id", btn.dataset.toggleTask),
+          .update({ is_completed: btn.dataset.done !== "true", updated_at: nowISO() })
+          .eq("id", btn.dataset.toggle),
         "actualizar la tarea"
       );
       loadPlanner();
     });
   });
 
-  list.querySelectorAll("[data-delete-task]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      await run(
-        supabase.from("planner_tasks").delete().eq("id", btn.dataset.deleteTask),
-        "eliminar la tarea"
-      );
-      loadPlanner();
-    });
-  });
+  wireDelete(list, "planner_tasks", loadPlanner, "eliminar la tarea");
 }
 
-$("task-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
+$("task-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
   const due = $("task-due").value;
   await run(
     supabase.from("planner_tasks").insert({
       title: $("task-title").value.trim(),
-      // El input date da "YYYY-MM-DD" (sin hora); mediodía evita que un
+      // El input date da "YYYY-MM-DD" sin hora; mediodía evita que un
       // desfase de zona horaria lo mueva al día anterior.
       due_date: due ? new Date(`${due}T12:00:00`).toISOString() : null,
       is_completed: false,
@@ -354,25 +404,25 @@ $("task-form").addEventListener("submit", async (event) => {
     }),
     "guardar la tarea"
   );
-  event.target.reset();
+  e.target.reset();
   loadPlanner();
 });
 
 // ── Finanzas ────────────────────────────────────────────────────────
 
-const CATEGORY_NAMES = {
-  food: "Comida",
-  leisure: "Ocio",
-  savings: "Ahorro",
-  services: "Servicios",
-  transport: "Transporte",
-  health: "Salud",
-  salary: "Salario",
-  other: "Otro",
+const CATEGORIES = {
+  food: { name: "Comida", icon: "🍽️" },
+  leisure: { name: "Ocio", icon: "🎮" },
+  savings: { name: "Ahorro", icon: "🏦" },
+  services: { name: "Servicios", icon: "⚡" },
+  transport: { name: "Transporte", icon: "🚗" },
+  health: { name: "Salud", icon: "❤️" },
+  salary: { name: "Salario", icon: "💰" },
+  other: { name: "Otro", icon: "•••" },
 };
 
-async function monthTransactions() {
-  return await run(
+const monthTransactions = () =>
+  run(
     supabase
       .from("transactions")
       .select("*")
@@ -381,58 +431,75 @@ async function monthTransactions() {
       .order("date", { ascending: false }),
     "cargar los movimientos"
   );
-}
 
 async function budgetSettings() {
-  const rows = await run(
-    supabase.from("budget_settings").select("*").limit(1),
-    "cargar tu presupuesto"
-  );
-  const budget = rows?.[0] ?? null;
-  if (budget?.currency_code) currencyCode = budget.currency_code;
-  return budget;
+  const rows = await run(supabase.from("budget_settings").select("*").limit(1), "cargar tu presupuesto");
+  const b = rows?.[0] ?? null;
+  if (b?.currency_code) currencyCode = b.currency_code;
+  return b;
 }
 
 async function loadFinance() {
-  await budgetSettings(); // fija la moneda antes de formatear nada
-  const transactions = (await monthTransactions()) ?? [];
-  const list = $("tx-list");
+  const budget = await budgetSettings(); // fija la moneda antes de formatear
+  const txs = (await monthTransactions()) ?? [];
 
-  if (transactions.length === 0) {
+  const income = txs.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
+  const expense = txs.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  const monthly = budget?.monthly_budget ?? 0;
+
+  $("fin-income").textContent = money(income);
+  $("fin-expense").textContent = money(expense);
+  $("fin-available").textContent = money(Math.max(0, monthly - expense));
+
+  // Barras por categoría (solo gastos), de mayor a menor.
+  const byCategory = {};
+  for (const t of txs) {
+    if (t.type !== "expense") continue;
+    byCategory[t.category] = (byCategory[t.category] ?? 0) + t.amount;
+  }
+  const ordered = Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
+  const max = ordered[0]?.[1] ?? 0;
+
+  $("fin-categories").innerHTML = ordered.length
+    ? ordered
+        .map(
+          ([cat, amount]) => `
+        <div class="cat-bar">
+          <div class="cat-name">${CATEGORIES[cat]?.icon ?? ""} ${CATEGORIES[cat]?.name ?? cat}</div>
+          <div class="track"><div class="track-fill orange" style="width:${(amount / max) * 100}%"></div></div>
+          <div class="cat-amount">${money(amount)}</div>
+        </div>`
+        )
+        .join("")
+    : `<p class="empty">Sin gastos este mes.</p>`;
+
+  const list = $("tx-list");
+  if (!txs.length) {
     list.innerHTML = `<li class="empty">Sin movimientos este mes.</li>`;
     return;
   }
 
-  list.innerHTML = transactions
+  list.innerHTML = txs
     .map((t) => {
-      const income = t.type === "income";
+      const isIncome = t.type === "income";
       return `
       <li class="row">
+        <div class="row-icon">${CATEGORIES[t.category]?.icon ?? "•"}</div>
         <div class="row-main">
-          <div class="row-title">${esc(t.note || CATEGORY_NAMES[t.category] || "Movimiento")}</div>
-          <div class="row-sub">${CATEGORY_NAMES[t.category] ?? ""} · ${dayOf(t.date)}</div>
+          <div class="row-title">${esc(t.note || CATEGORIES[t.category]?.name || "Movimiento")}</div>
+          <div class="row-sub"><span>${CATEGORIES[t.category]?.name ?? ""} · ${dayOf(t.date)}</span></div>
         </div>
-        <div class="row-value ${income ? "is-income" : "is-expense"}">
-          ${income ? "+" : "−"}${money(t.amount)}
-        </div>
-        <button class="delete" data-delete-tx="${t.id}" title="Eliminar" aria-label="Eliminar">✕</button>
+        <div class="row-value ${isIncome ? "is-income" : "is-expense"}">${isIncome ? "+" : "−"}${money(t.amount)}</div>
+        <button class="delete" data-del="${t.id}" title="Eliminar" aria-label="Eliminar">✕</button>
       </li>`;
     })
     .join("");
 
-  list.querySelectorAll("[data-delete-tx]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      await run(
-        supabase.from("transactions").delete().eq("id", btn.dataset.deleteTx),
-        "eliminar el movimiento"
-      );
-      loadFinance();
-    });
-  });
+  wireDelete(list, "transactions", loadFinance, "eliminar el movimiento");
 }
 
-$("tx-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
+$("tx-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
   await run(
     supabase.from("transactions").insert({
       amount: Number($("tx-amount").value) || 0,
@@ -444,20 +511,47 @@ $("tx-form").addEventListener("submit", async (event) => {
     }),
     "guardar el movimiento"
   );
-  event.target.reset();
+  e.target.reset();
   loadFinance();
 });
 
 // ── Hábitos ─────────────────────────────────────────────────────────
 
-$("habit-kind").addEventListener("change", () => {
+// Mismas plantillas que HabitTemplate.swift en iOS.
+const HABIT_TEMPLATES = [
+  { name: "Tiempo de pantalla", kind: "numeric", target: 3, dir: "atMost", unit: "h" },
+  { name: "Agua", kind: "numeric", target: 8, dir: "atLeast", unit: "vasos" },
+  { name: "Dormir", kind: "numeric", target: 8, dir: "atLeast", unit: "h" },
+  { name: "Ejercicio", kind: "checkbox" },
+  { name: "Leer", kind: "checkbox" },
+  { name: "Meditar", kind: "checkbox" },
+];
+
+function syncHabitKindFields() {
   const numeric = $("habit-kind").value === "numeric";
   $("habit-target").hidden = !numeric;
   $("habit-direction").hidden = !numeric;
   $("habit-unit").hidden = !numeric;
+}
+$("habit-kind").addEventListener("change", syncHabitKindFields);
+
+$("habit-templates").innerHTML = HABIT_TEMPLATES.map(
+  (t, i) => `<button class="chip" type="button" data-tpl="${i}">${esc(t.name)}</button>`
+).join("");
+
+$("habit-templates").querySelectorAll("[data-tpl]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const t = HABIT_TEMPLATES[Number(btn.dataset.tpl)];
+    $("habit-name").value = t.name;
+    $("habit-kind").value = t.kind;
+    syncHabitKindFields();
+    $("habit-target").value = t.target ?? "";
+    $("habit-direction").value = t.dir ?? "atLeast";
+    $("habit-unit").value = t.unit ?? "";
+  });
 });
 
-/** ¿Cumple este registro el objetivo del hábito? Misma regla que
+/** ¿Cumple este registro el objetivo? Misma regla que
  *  HabitStatus.isGoalMetToday en iOS. */
 function goalMet(habit, log) {
   if (!log) return false;
@@ -473,17 +567,15 @@ function goalMet(habit, log) {
 function streakFor(habit, logs) {
   const byDay = new Map();
   for (const log of logs) {
-    const day = new Date(log.date);
-    day.setHours(0, 0, 0, 0);
-    byDay.set(day.getTime(), log);
+    const d = new Date(log.date);
+    d.setHours(0, 0, 0, 0);
+    byDay.set(d.getTime(), log);
   }
 
-  let cursor = startOfToday();
+  const cursor = startOfToday();
   // Si hoy aún no está cumplido, la racha se mide desde ayer — no se
-  // rompe solo porque el día no haya terminado.
-  if (!goalMet(habit, byDay.get(cursor.getTime()))) {
-    cursor.setDate(cursor.getDate() - 1);
-  }
+  // rompe solo porque el día no haya terminado todavía.
+  if (!goalMet(habit, byDay.get(cursor.getTime()))) cursor.setDate(cursor.getDate() - 1);
 
   let streak = 0;
   while (goalMet(habit, byDay.get(cursor.getTime()))) {
@@ -493,40 +585,45 @@ function streakFor(habit, logs) {
   return streak;
 }
 
-async function loadHabits() {
+const logForToday = (logs, habitId) => {
+  const today = startOfToday().getTime();
+  return logs.find((l) => {
+    if (l.habit_id !== habitId) return false;
+    const d = new Date(l.date);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime() === today;
+  });
+};
+
+async function fetchHabits() {
   const habits =
     (await run(
       supabase.from("habits").select("*").eq("is_active", true).order("sort_order"),
       "cargar los hábitos"
     )) ?? [];
-
   const logs = (await run(supabase.from("habit_logs").select("*"), "cargar los registros")) ?? [];
+  return { habits, logs };
+}
+
+async function loadHabits() {
+  const { habits, logs } = await fetchHabits();
   const list = $("habit-list");
 
-  if (habits.length === 0) {
-    list.innerHTML = `<li class="empty">Aún no tienes hábitos. Añade uno arriba.</li>`;
+  if (!habits.length) {
+    list.innerHTML = `<li class="empty">Aún no tienes hábitos. Añade uno arriba o toca una plantilla.</li>`;
     return;
   }
 
-  const today = startOfToday().getTime();
-  const todaysLog = (habitId) =>
-    logs.find((l) => {
-      if (l.habit_id !== habitId) return false;
-      const d = new Date(l.date);
-      d.setHours(0, 0, 0, 0);
-      return d.getTime() === today;
-    });
-
   list.innerHTML = habits
     .map((h) => {
-      const log = todaysLog(h.id);
+      const log = logForToday(logs, h.id);
       const streak = streakFor(h, logs.filter((l) => l.habit_id === h.id));
-      const streakLabel = streak > 0 ? `<span class="streak">🔥 ${streak} días</span>` : "";
+      const met = goalMet(h, log);
 
       const control =
         h.kind === "checkbox"
           ? `<button class="check ${log?.is_completed ? "is-checked" : ""}"
-                     data-toggle-habit="${h.id}" data-completed="${!!log?.is_completed}"
+                     data-toggle-habit="${h.id}" data-done="${!!log?.is_completed}"
                      aria-label="Marcar como hecho">✓</button>`
           : `<input class="numeric-input" type="number" step="0.1" min="0"
                     value="${log?.value ?? ""}" data-log-habit="${h.id}"
@@ -539,21 +636,23 @@ async function loadHabits() {
 
       return `
       <li class="row">
+        <div class="row-icon">${met ? "✅" : "⚪️"}</div>
         <div class="row-main">
           <div class="row-title">${esc(h.name)}</div>
-          <div class="row-sub">${target} ${streakLabel}</div>
+          <div class="row-sub">
+            ${target ? `<span>${target}</span>` : ""}
+            ${streak > 0 ? `<span class="streak">🔥 ${streak} días</span>` : ""}
+          </div>
         </div>
         ${control}
-        <button class="delete" data-delete-habit="${h.id}" title="Eliminar" aria-label="Eliminar">✕</button>
+        <button class="delete" data-del="${h.id}" title="Eliminar" aria-label="Eliminar">✕</button>
       </li>`;
     })
     .join("");
 
   list.querySelectorAll("[data-toggle-habit]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      await upsertHabitLog(btn.dataset.toggleHabit, {
-        is_completed: btn.dataset.completed !== "true",
-      });
+      await upsertHabitLog(btn.dataset.toggleHabit, { is_completed: btn.dataset.done !== "true" });
       loadHabits();
     });
   });
@@ -568,16 +667,8 @@ async function loadHabits() {
     });
   });
 
-  list.querySelectorAll("[data-delete-habit]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      // habit_logs cae solo por el ON DELETE CASCADE del esquema.
-      await run(
-        supabase.from("habits").delete().eq("id", btn.dataset.deleteHabit),
-        "eliminar el hábito"
-      );
-      loadHabits();
-    });
-  });
+  // habit_logs cae solo por el ON DELETE CASCADE del esquema.
+  wireDelete(list, "habits", loadHabits, "eliminar el hábito");
 }
 
 /** Crea o actualiza el registro de HOY para un hábito. */
@@ -596,10 +687,7 @@ async function upsertHabitLog(habitId, fields) {
 
   if (existing?.length) {
     return run(
-      supabase
-        .from("habit_logs")
-        .update({ ...fields, updated_at: nowISO() })
-        .eq("id", existing[0].id),
+      supabase.from("habit_logs").update({ ...fields, updated_at: nowISO() }).eq("id", existing[0].id),
       "guardar el hábito"
     );
   }
@@ -616,8 +704,8 @@ async function upsertHabitLog(habitId, fields) {
   );
 }
 
-$("habit-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
+$("habit-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
   const numeric = $("habit-kind").value === "numeric";
   await run(
     supabase.from("habits").insert({
@@ -634,58 +722,294 @@ $("habit-form").addEventListener("submit", async (event) => {
     }),
     "guardar el hábito"
   );
-  event.target.reset();
-  $("habit-kind").dispatchEvent(new Event("change"));
+  e.target.reset();
+  syncHabitKindFields();
   loadHabits();
 });
+
+// ── Medicación ──────────────────────────────────────────────────────
+
+/** Cruza los horarios de cada medicamento con los registros de hoy —
+ *  misma construcción que MedicationRepository.todaysDoses() en iOS. */
+async function todaysDoses() {
+  const meds =
+    (await run(
+      supabase.from("medications").select("*").eq("is_active", true).order("name"),
+      "cargar la medicación"
+    )) ?? [];
+
+  const logs =
+    (await run(
+      supabase
+        .from("medication_dose_logs")
+        .select("*")
+        .gte("date", startOfToday().toISOString())
+        .lt("date", startOfTomorrow().toISOString()),
+      "cargar las tomas"
+    )) ?? [];
+
+  const doses = [];
+  for (const med of meds) {
+    for (const minute of med.reminder_minutes_since_midnight ?? []) {
+      const log = logs.find((l) => l.medication_id === med.id && l.minute_of_day === minute);
+      doses.push({
+        med,
+        minute,
+        taken: !!log?.taken_at,
+        skipped: !!log?.skipped,
+        logId: log?.id ?? null,
+      });
+    }
+  }
+  return { meds, doses: doses.sort((a, b) => a.minute - b.minute) };
+}
+
+async function loadMedication() {
+  const { meds, doses } = await todaysDoses();
+
+  const list = $("dose-list");
+  list.innerHTML = doses.length
+    ? doses
+        .map(
+          (d, i) => `
+      <li class="row">
+        <button class="check ${d.taken ? "is-checked" : ""}"
+                data-dose="${i}" aria-label="Marcar como tomada">✓</button>
+        <div class="row-icon">💊</div>
+        <div class="row-main">
+          <div class="row-title ${d.taken ? "is-done" : ""}">${esc(d.med.name)}</div>
+          <div class="row-sub">
+            <span>${minutesToTime(d.minute)}</span>
+            ${d.med.dosage ? `<span>${esc(d.med.dosage)}</span>` : ""}
+            ${d.skipped ? `<span>omitida</span>` : ""}
+          </div>
+        </div>
+      </li>`
+        )
+        .join("")
+    : `<li class="empty">No tienes tomas programadas para hoy.</li>`;
+
+  list.querySelectorAll("[data-dose]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const d = doses[Number(btn.dataset.dose)];
+      await setDoseTaken(d, !d.taken);
+      loadMedication();
+    });
+  });
+
+  const medList = $("med-list");
+  medList.innerHTML = meds.length
+    ? meds
+        .map(
+          (m) => `
+      <li class="row">
+        <div class="row-icon">💊</div>
+        <div class="row-main">
+          <div class="row-title">${esc(m.name)}</div>
+          <div class="row-sub">
+            <span>${(m.reminder_minutes_since_midnight ?? []).map(minutesToTime).join(" · ") || "sin horarios"}</span>
+            ${m.dosage ? `<span>${esc(m.dosage)}</span>` : ""}
+          </div>
+        </div>
+        <button class="delete" data-del="${m.id}" title="Eliminar" aria-label="Eliminar">✕</button>
+      </li>`
+        )
+        .join("")
+    : `<li class="empty">Aún no has añadido ningún medicamento.</li>`;
+
+  // medication_dose_logs cae solo por el ON DELETE CASCADE del esquema.
+  wireDelete(medList, "medications", loadMedication, "eliminar el medicamento");
+}
+
+async function setDoseTaken(dose, taken) {
+  const fields = { taken_at: taken ? nowISO() : null, skipped: false, updated_at: nowISO() };
+
+  if (dose.logId) {
+    return run(
+      supabase.from("medication_dose_logs").update(fields).eq("id", dose.logId),
+      "guardar la toma"
+    );
+  }
+
+  return run(
+    supabase.from("medication_dose_logs").insert({
+      medication_id: dose.med.id,
+      date: startOfToday().toISOString(),
+      minute_of_day: dose.minute,
+      ...fields,
+    }),
+    "guardar la toma"
+  );
+}
+
+$("med-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  // "08:00, 20:00" → [480, 1200] (minutos desde medianoche, como en iOS).
+  const minutes = $("med-times")
+    .value.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => {
+      const [h, m] = s.split(":").map(Number);
+      return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null;
+    })
+    .filter((m) => m !== null && m >= 0 && m < 1440)
+    .sort((a, b) => a - b);
+
+  if (!minutes.length) {
+    showError("Escribe al menos una hora válida, por ejemplo 08:00 o 08:00, 20:00");
+    return;
+  }
+
+  await run(
+    supabase.from("medications").insert({
+      name: $("med-name").value.trim(),
+      dosage: $("med-dosage").value.trim() || null,
+      reminder_minutes_since_midnight: minutes,
+      is_active: true,
+      updated_at: nowISO(),
+    }),
+    "guardar el medicamento"
+  );
+  e.target.reset();
+  loadMedication();
+});
+
+// ── Ajustes ─────────────────────────────────────────────────────────
+
+async function loadSettings() {
+  const goal = await nutritionGoal();
+  $("goal-calories").value = goal?.daily_calorie_goal ?? 2000;
+  $("goal-protein").value = goal?.protein_goal_grams ?? 120;
+  $("goal-carbs").value = goal?.carbs_goal_grams ?? 225;
+  $("goal-fat").value = goal?.fat_goal_grams ?? 65;
+
+  const budget = await budgetSettings();
+  $("budget-monthly").value = budget?.monthly_budget ?? 1000;
+  $("budget-savings").value = budget?.total_savings ?? 0;
+  $("budget-currency").value = budget?.currency_code ?? "EUR";
+
+  const { data } = await supabase.auth.getUser();
+  $("settings-email").textContent = data?.user?.email ?? "";
+}
+
+// Las tres tablas "singleton" (una fila por usuario) usan upsert por
+// user_id, igual que CloudSyncService.syncSingleton en iOS — así la web
+// y la app no crean dos filas distintas para lo mismo.
+$("goal-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await run(
+    supabase.from("nutrition_goals").upsert(
+      {
+        user_id: (await supabase.auth.getUser()).data.user.id,
+        daily_calorie_goal: Number($("goal-calories").value) || 2000,
+        protein_goal_grams: Number($("goal-protein").value) || 0,
+        carbs_goal_grams: Number($("goal-carbs").value) || 0,
+        fat_goal_grams: Number($("goal-fat").value) || 0,
+        updated_at: nowISO(),
+      },
+      { onConflict: "user_id" }
+    ),
+    "guardar el objetivo"
+  );
+  showSaved($("goal-form"));
+});
+
+$("budget-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  currencyCode = $("budget-currency").value;
+  await run(
+    supabase.from("budget_settings").upsert(
+      {
+        user_id: (await supabase.auth.getUser()).data.user.id,
+        monthly_budget: Number($("budget-monthly").value) || 0,
+        total_savings: Number($("budget-savings").value) || 0,
+        currency_code: currencyCode,
+        updated_at: nowISO(),
+      },
+      { onConflict: "user_id" }
+    ),
+    "guardar el presupuesto"
+  );
+  showSaved($("budget-form"));
+});
+
+/** Confirmación breve en el propio botón, sin sacar un diálogo. */
+function showSaved(form) {
+  const btn = form.querySelector("button[type=submit]");
+  const original = btn.textContent;
+  btn.textContent = "Guardado ✓";
+  btn.disabled = true;
+  setTimeout(() => {
+    btn.textContent = original;
+    btn.disabled = false;
+  }, 1400);
+}
 
 // ── Inicio ──────────────────────────────────────────────────────────
 
 async function loadHome() {
-  const [entries, goal, budget, transactions] = await Promise.all([
+  const [entries, goal, budget, txs] = await Promise.all([
     todaysFood(),
     nutritionGoal(),
     budgetSettings(),
     monthTransactions(),
   ]);
 
-  // Calorías
-  const consumed = (entries ?? []).reduce((sum, e) => sum + (e.calories ?? 0), 0);
-  const goalCalories = goal?.daily_calorie_goal ?? 2000;
-  const remaining = goalCalories - consumed;
-  $("home-calories").textContent = Math.round(remaining);
+  // Anillo de calorías
+  const consumed = (entries ?? []).reduce((s, e) => s + (e.calories ?? 0), 0);
+  const goalCal = goal?.daily_calorie_goal ?? 2000;
+  $("home-calories").textContent = Math.round(goalCal - consumed);
   $("home-calories-detail").textContent =
-    `${Math.round(consumed)} de ${Math.round(goalCalories)} kcal · ${(entries ?? []).length} comidas`;
-  const bar = $("home-calories-bar");
-  bar.style.width = `${Math.min(100, (consumed / goalCalories) * 100)}%`;
-  bar.classList.toggle("is-over", consumed > goalCalories);
+    `${Math.round(consumed)} de ${Math.round(goalCal)} kcal · ${(entries ?? []).length} comidas`;
+
+  const ratio = goalCal > 0 ? Math.min(1, consumed / goalCal) : 0;
+  const ring = $("ring-progress");
+  const CIRCUMFERENCE = 2 * Math.PI * 52;
+  ring.style.strokeDashoffset = String(CIRCUMFERENCE * (1 - ratio));
+  ring.classList.toggle("is-over", consumed > goalCal);
+
+  // Macros
+  const sum = (key) => (entries ?? []).reduce((s, e) => s + (e[key] ?? 0), 0);
+  const macros = [
+    { name: "Proteína", got: sum("protein_grams"), target: goal?.protein_goal_grams ?? 0 },
+    { name: "Carbos", got: sum("carbs_grams"), target: goal?.carbs_goal_grams ?? 0 },
+    { name: "Grasas", got: sum("fat_grams"), target: goal?.fat_goal_grams ?? 0 },
+  ];
+  $("home-macros").innerHTML = macros
+    .map(
+      (m) => `
+      <div class="macro">
+        <div class="macro-name">${m.name}</div>
+        <div class="track"><div class="track-fill" style="width:${m.target ? Math.min(100, (m.got / m.target) * 100) : 0}%"></div></div>
+        <div class="macro-val">${Math.round(m.got)}${m.target ? ` / ${Math.round(m.target)}` : ""} g</div>
+      </div>`
+    )
+    .join("");
 
   // Hábitos
-  const habits =
-    (await run(
-      supabase.from("habits").select("*").eq("is_active", true),
-      "cargar los hábitos"
-    )) ?? [];
-  const logs = (await run(supabase.from("habit_logs").select("*"), "cargar los registros")) ?? [];
-  const today = startOfToday().getTime();
-  const metToday = habits.filter((h) => {
-    const log = logs.find((l) => {
-      if (l.habit_id !== h.id) return false;
-      const d = new Date(l.date);
-      d.setHours(0, 0, 0, 0);
-      return d.getTime() === today;
-    });
-    return goalMet(h, log);
-  }).length;
-  $("home-habits").textContent = habits.length ? `${metToday}/${habits.length}` : "—";
+  const { habits, logs } = await fetchHabits();
+  const met = habits.filter((h) => goalMet(h, logForToday(logs, h.id))).length;
+  $("home-habits").textContent = habits.length ? `${met}/${habits.length}` : "—";
   $("home-habits-detail").textContent = habits.length
-    ? metToday === habits.length
+    ? met === habits.length
       ? "¡Todos cumplidos hoy!"
       : "Cumplidos hoy"
     : "Aún no tienes hábitos.";
+  $("home-habits-bar").style.width = habits.length ? `${(met / habits.length) * 100}%` : "0%";
+
+  // Presupuesto
+  const spent = (txs ?? []).filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  const monthly = budget?.monthly_budget ?? 0;
+  $("home-available").textContent = money(Math.max(0, monthly - spent));
+  $("home-available-detail").textContent = `${money(spent)} gastado de ${money(monthly)}`;
+  const budgetBar = $("home-budget-bar");
+  budgetBar.style.width = monthly ? `${Math.min(100, (spent / monthly) * 100)}%` : "0%";
+  budgetBar.classList.toggle("is-over", spent > monthly);
 
   // Próxima tarea
-  const upcoming =
+  const next =
     (await run(
       supabase
         .from("planner_tasks")
@@ -697,17 +1021,16 @@ async function loadHome() {
         .limit(1),
       "cargar tu próxima tarea"
     )) ?? [];
-  $("home-next").textContent = upcoming[0]?.title ?? "Nada pendiente";
-  $("home-next-detail").textContent = upcoming[0]?.due_date ? dayOf(upcoming[0].due_date) : "";
+  $("home-next").textContent = next[0]?.title ?? "Nada pendiente";
+  $("home-next-detail").textContent = next[0]?.due_date ? dayOf(next[0].due_date) : "";
 
-  // Disponible
-  const spent = (transactions ?? [])
-    .filter((t) => t.type === "expense")
-    .reduce((sum, t) => sum + (t.amount ?? 0), 0);
-  const monthlyBudget = budget?.monthly_budget ?? 0;
-  $("home-available").textContent = money(Math.max(0, monthlyBudget - spent));
-  $("home-available-detail").textContent =
-    `${money(spent)} gastado de ${money(monthlyBudget)}`;
+  // Próxima toma
+  const { doses } = await todaysDoses();
+  const pending = doses.find((d) => !d.taken && !d.skipped);
+  $("home-dose").textContent = pending ? pending.med.name : "Sin tomas pendientes";
+  $("home-dose-detail").textContent = pending
+    ? `${minutesToTime(pending.minute)}${pending.med.dosage ? " · " + pending.med.dosage : ""}`
+    : "";
 }
 
 // ── Arranque y sesión ───────────────────────────────────────────────
@@ -718,17 +1041,32 @@ function showAuth() {
   $("auth-screen").hidden = false;
 }
 
-function showApp() {
+async function showApp() {
   $("boot").hidden = true;
   $("auth-screen").hidden = true;
   $("app").hidden = false;
-  loadHome();
+
+  $("topbar-date").textContent = new Date().toLocaleDateString("es-ES", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+
+  const { data } = await supabase.auth.getUser();
+  const email = data?.user?.email ?? "";
+  $("side-email").textContent = email;
+  $("side-avatar").textContent = email.charAt(0) || "·";
+
+  go("home");
 }
 
+buildNav();
+syncHabitKindFields();
+setAuthMode("signin");
+
 supabase.auth.onAuthStateChange((_event, session) => {
-  if (session) {
-    showApp();
-  } else {
+  if (session) showApp();
+  else {
     showAuth();
     setAuthMessage("");
   }
@@ -736,8 +1074,8 @@ supabase.auth.onAuthStateChange((_event, session) => {
 
 // Sesión inicial: onAuthStateChange también dispara al arrancar, pero
 // comprobarlo aquí evita el parpadeo de la pantalla de carga.
-const { data: { session } } = await supabase.auth.getSession();
+const {
+  data: { session },
+} = await supabase.auth.getSession();
 if (session) showApp();
 else showAuth();
-
-setAuthMode("signin");
