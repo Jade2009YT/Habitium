@@ -93,13 +93,19 @@ final class SwiftDataProgressionRepository: ProgressionRepository {
         save()
 
         let levelAfter = ProgressionEngine.level(forTotalXP: profile.totalXP)
-        return XPAward(
+        let result = XPAward(
             source: source,
             amount: amount,
             didLevelUp: levelAfter > levelBefore,
             newLevel: levelAfter,
             unlockedTiers: newTierIDs
         )
+
+        // Se publica aquí, en el único punto por el que pasa toda
+        // concesión, en vez de en cada sitio que premia algo: así ninguna
+        // fuente nueva de XP puede olvidarse de avisar a la interfaz.
+        ProgressionEvents.shared.post(result)
+        return result
     }
 
     @discardableResult

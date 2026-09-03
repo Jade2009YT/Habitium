@@ -201,11 +201,18 @@ private struct HabitRow: View {
             switch status.kind {
             case .checkbox:
                 Button {
-                    viewModel.toggleCompleted(status)
+                    Haptics.tap()
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.55)) {
+                        viewModel.toggleCompleted(status)
+                    }
                 } label: {
                     Image(systemName: status.isCompletedToday ? "checkmark.circle.fill" : "circle")
                         .font(.title2)
                         .foregroundStyle(status.isCompletedToday ? Theme.Colors.habits : .secondary)
+                        // El rebote al marcar: pequeño, pero es lo que
+                        // hace que apetezca marcar el siguiente.
+                        .scaleEffect(status.isCompletedToday ? 1.12 : 1)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.5), value: status.isCompletedToday)
                 }
                 .buttonStyle(.plain)
 

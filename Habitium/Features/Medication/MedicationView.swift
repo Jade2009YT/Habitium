@@ -126,7 +126,10 @@ struct MedicationView: View {
                 // "omitida" en un historial de medicación), así que se
                 // mantienen separadas en vez de un único interruptor.
                 Button {
-                    viewModel.markTaken(dose)
+                    Haptics.tap()
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.6)) {
+                        viewModel.markTaken(dose)
+                    }
                 } label: {
                     Image(systemName: "checkmark")
                         .font(.subheadline.weight(.bold))

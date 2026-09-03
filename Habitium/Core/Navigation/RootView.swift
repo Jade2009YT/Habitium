@@ -35,6 +35,11 @@ struct RootView: View {
                 Color(.systemBackground).ignoresSafeArea()
             } else if isSignedIn {
                 MainTabView()
+                    // Una sola vez, en la raíz: los avisos de XP y la
+                    // celebración de subir de nivel se ven encima de
+                    // cualquier pestaña, sin que cada pantalla tenga que
+                    // acordarse de nada.
+                    .progressionFeedback()
                     .fullScreenCover(isPresented: lockedBinding) {
                         AppLockView()
                     }

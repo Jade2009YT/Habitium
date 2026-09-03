@@ -26,9 +26,15 @@ final class HomeViewModel {
     private(set) var pendingMedicationDoses: [MedicationDose] = []
     private(set) var habitStatuses: [HabitStatus] = []
 
-    // Progresión — alimenta la tarjeta de nivel/racha de Inicio.
+    // Progresión — alimenta las tarjetas de nivel/racha y retos de Inicio.
     private(set) var totalXP: Int = 0
     private(set) var loginStreak: Int = 0
+    private(set) var dailyChallenges: [DailyChallenge] = []
+
+    var completedChallenges: Int { dailyChallenges.filter(\.isComplete).count }
+    var allChallengesDone: Bool {
+        !dailyChallenges.isEmpty && completedChallenges == dailyChallenges.count
+    }
 
     var level: Int { ProgressionEngine.level(forTotalXP: totalXP) }
     var levelTitle: String { ProgressionEngine.title(forLevel: level) }
@@ -53,6 +59,13 @@ final class HomeViewModel {
         let profile = container.progressionRepository.profile()
         totalXP = profile.totalXP
         loginStreak = profile.loginStreak
+
+        dailyChallenges = container.dailyChallengeService.todaysChallenges()
+        // Se comprueba en cada refresco porque los retos se completan
+        // desde cualquier pantalla: marcar el tercer hábito en Hábitos
+        // debe cobrar la bonificación al volver a Inicio, sin que haya
+        // que hacer nada especial allí.
+        container.dailyChallengeService.awardBonusIfComplete()
     }
 
     func toggleFocusTask(_ task: PlannerTask) {

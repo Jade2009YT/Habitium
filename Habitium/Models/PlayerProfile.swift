@@ -29,6 +29,7 @@ enum XPSource: String, Codable, CaseIterable {
     case workoutLogged
     case weightLogged
     case streakMilestone
+    case dailyChallenge
 
     var displayName: String {
         switch self {
@@ -42,6 +43,7 @@ enum XPSource: String, Codable, CaseIterable {
         case .workoutLogged: return "Entrenamiento registrado"
         case .weightLogged: return "Peso registrado"
         case .streakMilestone: return "Hito de racha"
+        case .dailyChallenge: return "Retos del día completados"
         }
     }
 
@@ -55,6 +57,7 @@ enum XPSource: String, Codable, CaseIterable {
         case .workoutLogged: return "figure.strengthtraining.traditional"
         case .weightLogged: return "scalemass.fill"
         case .streakMilestone: return "flame.fill"
+        case .dailyChallenge: return "target"
         }
     }
 
@@ -74,6 +77,7 @@ enum XPSource: String, Codable, CaseIterable {
         case .workoutLogged: return 30
         case .weightLogged: return 5
         case .streakMilestone: return 50
+        case .dailyChallenge: return DailyChallengeEngine.bonusXP
         }
     }
 }

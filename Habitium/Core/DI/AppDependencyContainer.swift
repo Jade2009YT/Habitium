@@ -25,6 +25,7 @@ final class AppDependencyContainer {
     /// experiencia al escribir, así que tiene que existir ya cuando se
     /// crean ellos.
     let progressionRepository: ProgressionRepository
+    let dailyChallengeService: DailyChallengeService
     /// StoreKit scaffold for a possible future "Habitium Pro" subscription.
     /// Nothing in the app currently checks `isProActive` — everything is
     /// unlocked for personal use.
@@ -46,6 +47,13 @@ final class AppDependencyContainer {
         self.workoutRepository = SwiftDataWorkoutRepository(
             context: modelContext,
             habitRepository: self.habitRepository,
+            progression: progression
+        )
+
+        self.dailyChallengeService = DailyChallengeService(
+            context: modelContext,
+            habitRepository: self.habitRepository,
+            medicationRepository: self.medicationRepository,
             progression: progression
         )
     }

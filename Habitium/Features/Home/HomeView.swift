@@ -30,6 +30,7 @@ struct HomeView: View {
                     VStack(spacing: Theme.Layout.sectionSpacing) {
                         greeting
                         levelCard(viewModel)
+                        challengesCard(viewModel)
                         caloriesCard(viewModel)
 
                         if !viewModel.focusTasks.isEmpty {
@@ -147,6 +148,72 @@ struct HomeView: View {
         .pressable()
     }
 
+    // MARK: - Retos del día
+
+    /// Cambian cada mañana. Es la razón para abrir la app un martes
+    /// cualquiera: el nivel y la racha premian la rutina, pero no
+    /// sorprenden; esto sí.
+    private func challengesCard(_ viewModel: HomeViewModel) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Layout.rowSpacing) {
+            CardHeader(title: "Retos de hoy", symbol: "target", color: Theme.Colors.streak) {
+                Text("\(viewModel.completedChallenges)/\(viewModel.dailyChallenges.count)")
+                    .font(.subheadline.weight(.bold).monospacedDigit())
+                    .foregroundStyle(viewModel.allChallengesDone ? Theme.Colors.nutrition : .secondary)
+            }
+
+            ForEach(viewModel.dailyChallenges) { challenge in
+                HStack(spacing: 11) {
+                    ZStack {
+                        Circle()
+                            .fill(challenge.isComplete
+                                  ? Theme.Colors.nutrition.opacity(0.16)
+                                  : Color(.tertiarySystemFill))
+                            .frame(width: 30, height: 30)
+                        Image(systemName: challenge.isComplete ? "checkmark" : challenge.kind.symbolName)
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(challenge.isComplete ? Theme.Colors.nutrition : .secondary)
+                    }
+                    .scaleEffect(challenge.isComplete ? 1.0 : 0.94)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.6), value: challenge.isComplete)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(challenge.kind.title(goal: challenge.goal))
+                            .font(.subheadline)
+                            .foregroundStyle(challenge.isComplete ? .secondary : .primary)
+                            .strikethrough(challenge.isComplete)
+                        if challenge.goal > 1 && !challenge.isComplete {
+                            ProgressBar(
+                                value: challenge.fraction,
+                                color: Theme.Colors.streak,
+                                height: 4
+                            )
+                        }
+                    }
+
+                    Spacer(minLength: 0)
+
+                    if challenge.goal > 1 && !challenge.isComplete {
+                        Text("\(challenge.progress)/\(challenge.goal)")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+
+            if viewModel.allChallengesDone {
+                Label("¡Retos completados! +\(DailyChallengeEngine.bonusXP) XP", systemImage: "sparkles")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Theme.Colors.nutrition)
+            } else {
+                Text("Complétalos todos para +\(DailyChallengeEngine.bonusXP) XP extra.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle()
+    }
+
     // MARK: - Calorías (tarjeta destacada, con anillo)
 
     private func caloriesCard(_ viewModel: HomeViewModel) -> some View {
@@ -219,7 +286,10 @@ struct HomeView: View {
             // botones: puedes tachar una prioridad sin salir de Inicio.
             ForEach(viewModel.focusTasks) { task in
                 Button {
-                    viewModel.toggleFocusTask(task)
+                    Haptics.tap()
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.6)) {
+                        viewModel.toggleFocusTask(task)
+                    }
                 } label: {
                     HStack(spacing: 11) {
                         Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
