@@ -76,6 +76,7 @@ struct LoginView: View {
             .padding(.top, 60)
             .padding(.bottom, 40)
         }
+        .themedBackground()
     }
 
     private var header: some View {

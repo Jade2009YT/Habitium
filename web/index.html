@@ -15,6 +15,23 @@
   <link rel="icon" href="icon.png">
 
   <link rel="stylesheet" href="styles.css">
+
+  <!-- Aplica el fondo guardado ANTES de que se pinte nada. Tiene que
+       ir aquí y no en app.js: app.js es un módulo y se ejecuta después
+       del primer pintado, así que quien tuviera "Noche" vería medio
+       segundo de blanco en cada carga. Es el único script en línea de
+       la página, y es por esto. -->
+  <script>
+    try {
+      document.documentElement.setAttribute(
+        "data-bg",
+        localStorage.getItem("habitium.bg") || "system"
+      );
+    } catch (e) {
+      // Navegador con el almacenamiento bloqueado: modo automático.
+      document.documentElement.setAttribute("data-bg", "system");
+    }
+  </script>
 </head>
 <body>
 
@@ -277,6 +294,13 @@
 
     <!-- ─────────── Ajustes ─────────── -->
     <section id="view-settings" class="view" hidden>
+      <div class="card form-card">
+        <h2>Fondo</h2>
+        <p class="muted">Los mismos seis que en la app del iPhone. Cambia al momento
+           y se queda guardado en este navegador.</p>
+        <div class="bg-picker" id="bg-picker" role="group" aria-label="Color de fondo"></div>
+      </div>
+
       <form id="goal-form" class="card form-card">
         <h2>Objetivo diario de nutrición</h2>
         <div class="form-grid">

@@ -14,6 +14,7 @@ struct SettingsView: View {
     @Environment(SupabaseAuthManager.self) private var emailAuth
     @Environment(LocalAccessManager.self) private var localAccess
     @Environment(AppLockManager.self) private var lockManager
+    @Environment(AppearanceStore.self) private var appearance
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: SettingsViewModel?
     @State private var selectedAccent: AccentTheme = AccentThemeStore.current
@@ -24,6 +25,7 @@ struct SettingsView: View {
                 if let viewModel {
                     Form {
                         accountSection
+                        backgroundSection
                         appearanceSection
                         securitySection
                         goalsSection(viewModel)
@@ -33,10 +35,18 @@ struct SettingsView: View {
                         currencySection(viewModel)
                         subscriptionSection
                     }
+                    // Ajustes sí se tiñe con el fondo elegido: es la
+                    // pantalla donde lo estás eligiendo, y ver el cambio
+                    // debajo de tu dedo es media explicación. Las hojas
+                    // de meter datos (añadir comida, gasto…) se quedan
+                    // con el gris del sistema a propósito: ahí lo que
+                    // importa es el formulario, no el color.
+                    .scrollContentBackground(.hidden)
                 } else {
                     ProgressView()
                 }
             }
+            .themedBackground()
             .navigationTitle("Ajustes")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -48,6 +58,41 @@ struct SettingsView: View {
                     viewModel = SettingsViewModel(container: container)
                 }
             }
+        }
+    }
+
+    /// El color de fondo de la app.
+    ///
+    /// Va PRIMERO y sin candados, al revés que los temas de acento de
+    /// abajo. Es deliberado: el fondo es lo que decide si la app te
+    /// resulta cómoda de mirar, y condicionar eso a jugar al pase sería
+    /// cobrarle la comodidad a quien solo quiere usar la app. Lo que se
+    /// gana con el pase son los acentos, que son un capricho.
+    private var backgroundSection: some View {
+        Section {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 12)], spacing: 14) {
+                ForEach(BackgroundTheme.allCases) { theme in
+                    Button {
+                        guard appearance.background != theme else { return }
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            appearance.background = theme
+                        }
+                        Haptics.tap()
+                    } label: {
+                        BackgroundSwatch(theme: theme, isSelected: appearance.background == theme)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.vertical, 6)
+
+            Text(appearance.background.subtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } header: {
+            Text("Fondo")
+        } footer: {
+            Text("Cambia al instante. Es una preferencia de este dispositivo, así que puedes tener el iPhone en oscuro y la web en claro.")
         }
     }
 

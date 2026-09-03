@@ -21,7 +21,7 @@
 // Al cambiar los archivos de la app, sube también este archivo con
 // CACHE_VERSION incrementado — así se limpian las cachés antiguas.
 
-const CACHE_VERSION = "habitium-v2";
+const CACHE_VERSION = "habitium-v3";
 
 const SHELL = [
   "./",

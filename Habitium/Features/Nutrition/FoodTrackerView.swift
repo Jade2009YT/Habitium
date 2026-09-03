@@ -64,7 +64,7 @@ struct FoodTrackerView: View {
                                                 }
                                                 .padding(10)
                                                 .frame(width: 130, alignment: .leading)
-                                                .background(Theme.Colors.cardBackground)
+                                                .themedCardFill()
                                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                                             }
                                             .buttonStyle(.plain)
@@ -94,10 +94,15 @@ struct FoodTrackerView: View {
                         }
                     }
                     .listStyle(.insetGrouped)
+                    // Sin esto, la lista pinta su propio gris del
+                    // sistema encima y el fondo elegido no se vería en
+                    // esta pantalla aunque sí en el resto.
+                    .scrollContentBackground(.hidden)
                 } else {
                     ProgressView()
                 }
             }
+            .themedBackground()
             .navigationTitle("Nutrición")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {

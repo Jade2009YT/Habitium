@@ -34,6 +34,7 @@ struct PlannerView: View {
                     ProgressView()
                 }
             }
+            .themedBackground()
             .navigationTitle("Calendario")
             .onAppear {
                 if viewModel == nil {

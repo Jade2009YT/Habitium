@@ -846,6 +846,87 @@ $("budget-form").addEventListener("submit", async (e) => {
   showSaved($("budget-form"));
 });
 
+// ── Fondo ───────────────────────────────────────────────────────────
+//
+// Los mismos seis fondos que en iOS (BackgroundTheme.swift). Aquí solo
+// están los colores de la MINIATURA: los de la página de verdad viven
+// en styles.css, en los bloques [data-bg="…"]. Están duplicados a
+// propósito y no leídos del CSS — sacarlos de getComputedStyle
+// obligaría a pintar seis veces la página entera solo para dibujar
+// seis cuadraditos.
+
+const BACKGROUNDS = [
+  { id: "system", name: "Automático", screen: "linear-gradient(90deg, #f2f2f7 0 50%, #0b0d10 50%)" },
+  { id: "light", name: "Claro", screen: "#f2f2f7", card: "#ffffff" },
+  { id: "cream", name: "Crema", screen: "#fbfaf7", card: "#ffffff" },
+  { id: "vanilla", name: "Vainilla", screen: "#fff8e9", card: "#fffdf6" },
+  { id: "graphite", name: "Grafito", screen: "#17181c", card: "#24262b" },
+  { id: "night", name: "Noche", screen: "#0b0d10", card: "#16171c" },
+];
+
+const BG_KEY = "habitium.bg";
+
+/** El fondo elegido, o "system" si no hay nada guardado o no se puede leer. */
+function currentBackground() {
+  try {
+    const saved = localStorage.getItem(BG_KEY);
+    if (BACKGROUNDS.some((b) => b.id === saved)) return saved;
+  } catch (e) {
+    // Almacenamiento bloqueado (modo privado en algunos navegadores).
+  }
+  return "system";
+}
+
+function applyBackground(id) {
+  document.documentElement.setAttribute("data-bg", id);
+  try {
+    localStorage.setItem(BG_KEY, id);
+  } catch (e) {
+    // Sin guardar: el fondo aguanta esta sesión y punto. Mejor eso que
+    // reventar la pantalla de Ajustes por no poder escribir.
+  }
+  updateThemeColor(id);
+  renderBackgroundPicker();
+}
+
+/** Pinta la barra del navegador del color del fondo, no de verde.
+ *  Con la app instalada en Android es la diferencia entre que se vea
+ *  entera de un color o con una franja verde que no pega con nada. */
+function updateThemeColor(id) {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) return;
+  const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+  const resolved = id === "system" ? (prefersDark ? "night" : "light") : id;
+  meta.setAttribute("content", BACKGROUNDS.find((b) => b.id === resolved)?.screen ?? "#f2f2f7");
+}
+
+function renderBackgroundPicker() {
+  const host = $("bg-picker");
+  if (!host) return;
+  const active = currentBackground();
+
+  host.innerHTML = BACKGROUNDS.map(
+    (b) => `
+    <button class="bg-opt" type="button" data-bg-id="${b.id}"
+            aria-pressed="${b.id === active}" title="${b.name}">
+      <span class="bg-prev" style="background:${b.screen}">
+        ${b.card ? `<span class="bg-prev-card" style="background:${b.card}"></span>` : ""}
+      </span>
+      <span>${b.name}</span>
+    </button>`
+  ).join("");
+
+  host.querySelectorAll("[data-bg-id]").forEach((btn) => {
+    btn.addEventListener("click", () => applyBackground(btn.dataset.bgId));
+  });
+}
+
+// Con "Automático", seguir al sistema también cuando cambia con la app
+// abierta — al anochecer, sin tocar nada.
+window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener?.("change", () => {
+  if (currentBackground() === "system") updateThemeColor("system");
+});
+
 /** Confirmación breve en el propio botón, sin sacar un diálogo. */
 function showSaved(form) {
   const btn = form.querySelector("button[type=submit]");
@@ -965,6 +1046,8 @@ async function showApp() {
 buildNav();
 syncHabitKindFields();
 setAuthMode("signin");
+renderBackgroundPicker();
+updateThemeColor(currentBackground());
 
 supabase.auth.onAuthStateChange((_event, session) => {
   if (session) showApp();

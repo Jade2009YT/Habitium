@@ -29,7 +29,7 @@ struct DayTimelineView: View {
                                 .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
                                 .frame(width: labelWidth, alignment: .trailing)
-                            Rectangle().fill(Theme.Colors.cardBackground).frame(height: 1)
+                            Rectangle().fill(Color(.separator)).frame(height: 1)
                         }
                         .frame(height: hourHeight, alignment: .top)
                     }

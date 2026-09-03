@@ -80,10 +80,12 @@ struct FinanceView: View {
                         }
                     }
                     .listStyle(.insetGrouped)
+                    .scrollContentBackground(.hidden)
                 } else {
                     ProgressView()
                 }
             }
+            .themedBackground()
             .navigationTitle("Finanzas")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {

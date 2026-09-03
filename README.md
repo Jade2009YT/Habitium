@@ -562,6 +562,62 @@ archivos de la app, así que arranca al instante y sigue funcionando sin
 conexión o con el NAS apagado. Ver `web/README.md` para ponerla en marcha
 y para publicarla en un Synology con Web Station.
 
+## Fondo elegible (iPhone y web)
+
+El color de fondo lo elige cada persona en **Ajustes → Fondo**. Seis
+opciones, las mismas en las dos plataformas:
+
+| | Pantalla | Tarjeta | Esquema |
+|---|---|---|---|
+| **Automático** | sigue al iPhone / al navegador | — | del sistema |
+| **Claro** | `#F2F2F7` | `#FFFFFF` | claro |
+| **Crema** | `#FBFAF7` | `#FFFFFF` | claro |
+| **Vainilla** | `#FFF8E9` | `#FFFDF6` | claro |
+| **Grafito** | `#17181C` | `#24262B` | oscuro |
+| **Noche** | `#0B0D10` | `#16171C` | oscuro |
+
+Por qué existe esto: al maquetar tres direcciones de diseño distintas
+("neón oscuro", "pop", "editorial"), lo que de verdad cambiaba entre
+ellas era el fondo. En vez de imponer una a todo el mundo, se elige. El
+resto del diseño —los colores de cada área, los radios, los tamaños— no
+cambia, así que sigue siendo la misma app y no seis.
+
+**Dos reglas que no se pueden saltar al añadir un fondo nuevo** (hay
+tests que las comprueban, `HabitiumTests/BackgroundThemeTests.swift`):
+
+1. Fondo oscuro → la tarjeta se separa con un **borde tenue** y sin
+   sombra. Una sombra negra sobre fondo negro no se ve, y sin nada que
+   las separe la pantalla queda como una mancha plana.
+2. Fondo claro → al revés: sombra y nada de borde.
+
+Detalles de implementación que no son obvios:
+
+- **iOS** — `BackgroundTheme` + `AppearanceStore` (`@Observable`, en
+  `UserDefaults`). El `preferredColorScheme` se aplica **una sola vez**
+  en `RootView`, y con eso acompañan el texto, la barra de pestañas y
+  los menús. Las listas (`Nutrición`, `Finanzas`) necesitan además
+  `.scrollContentBackground(.hidden)`, o pintan su gris del sistema
+  encima y el fondo elegido no se ve en esas dos pantallas.
+- **Web** — variables CSS bajo `[data-bg="…"]`. El bloque
+  `@media (prefers-color-scheme: dark)` está acotado a
+  `[data-bg="system"]`: sin eso, elegir "Claro" con el móvil en modo
+  oscuro no serviría de nada porque el `@media` seguiría ganando. Un
+  script mínimo en el `<head>` de `index.html` pone el atributo antes
+  del primer pintado — es el único script en línea de la página, y es
+  para evitar el fogonazo blanco de quien tenga "Noche".
+- El fondo **no viaja por la sincronización**: es una preferencia de
+  cada dispositivo, y es razonable querer el iPhone en oscuro y la web
+  en claro. Los temas de *acento* del pase de temporada son otra cosa y
+  siguen desbloqueándose por nivel; el fondo es gratis desde el minuto
+  uno, porque condicionar la comodidad de leer a jugar al pase sería
+  cobrarle la vista a quien solo quiere usar la app.
+
+Lo que **no** se tiñe, a propósito: las hojas de meter datos (añadir
+comida, gasto, tarea…) se quedan con el gris del sistema. Ahí lo que
+importa es el formulario, no el color. Ajustes sí se tiñe, porque es la
+pantalla donde estás eligiendo y ver el cambio bajo el dedo es media
+explicación.
+
 ## Lo mejor de las apps mejor valoradas, adaptado a Habitium
 
 Antes de esta ronda, investigué qué hace tan queridas a la app de nutrición,

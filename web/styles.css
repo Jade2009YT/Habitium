@@ -37,8 +37,20 @@
   --tabbar-h: 62px;
 }
 
+/* ── Fondo elegible ───────────────────────────────────────────────
+   Seis fondos, los mismos que en el iPhone (BackgroundTheme.swift).
+   El elegido se guarda en localStorage y un script diminuto en el
+   <head> pone data-bg en el <html> ANTES de pintar nada — si se
+   dejara para app.js, quien tenga "Noche" vería un fogonazo blanco
+   en cada carga.
+
+   Ojo al detalle de abajo: el bloque "sigue al sistema" está acotado
+   a data-bg="system". Sin eso, elegir "Claro" con el móvil en modo
+   oscuro no serviría de nada: el @media seguiría ganando. */
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-bg]),
+  :root[data-bg="system"] {
     --green-soft: #113524;
     --blue-soft: #14224a;
     --orange-soft: #3a2110;
@@ -57,6 +69,72 @@
     --shadow: none;
   }
 }
+
+/* Claros elegidos a mano */
+:root[data-bg="light"] {
+  --bg: #f2f2f7;
+  --surface: #ffffff;
+  --surface-2: #fafbfc;
+}
+
+:root[data-bg="cream"] {
+  --bg: #fbfaf7;
+  --surface: #ffffff;
+  --surface-2: #f7f5f0;
+  --border: #e8e4db;
+}
+
+:root[data-bg="vanilla"] {
+  --bg: #fff8e9;
+  --surface: #fffdf6;
+  --surface-2: #fdf6e6;
+  --border: #ece0c6;
+  --text-2: #5f5949;
+  --text-3: #918a77;
+}
+
+/* Oscuros elegidos a mano. Lo común primero, el fondo concreto
+   después: así solo cambian cuatro variables entre uno y otro. */
+:root[data-bg="graphite"],
+:root[data-bg="night"] {
+  --green-soft: #113524;
+  --blue-soft: #14224a;
+  --orange-soft: #3a2110;
+  --purple-soft: #241a48;
+  --pink-soft: #3a1229;
+  --red-soft: #3d1517;
+
+  --text: #f0f3f7;
+  --text-2: #a3adbb;
+  --text-3: #6f7987;
+  --shadow-sm: none;
+  --shadow: none;
+}
+
+:root[data-bg="graphite"] {
+  --bg: #17181c;
+  --surface: #24262b;
+  --surface-2: #2a2d33;
+  --border: #33373f;
+}
+
+:root[data-bg="night"] {
+  --bg: #0b0d10;
+  --surface: #16171c;
+  --surface-2: #1b1d23;
+  --border: #23252c;
+}
+
+/* Le dice al navegador de qué palo va la página, y con eso vienen
+   gratis los desplegables, los calendarios de los <input type=date>
+   y la barra de scroll en el color correcto. Sin esto, en Noche los
+   selectores salen blancos sobre negro. */
+:root[data-bg="system"] { color-scheme: light dark; }
+:root[data-bg="light"],
+:root[data-bg="cream"],
+:root[data-bg="vanilla"] { color-scheme: light; }
+:root[data-bg="graphite"],
+:root[data-bg="night"] { color-scheme: dark; }
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -713,6 +791,61 @@ input[type="date"] { min-height: 42px; }
 }
 .tab span { font-size: 18px; line-height: 1; }
 .tab.is-active { color: var(--green); font-weight: 600; }
+
+/* ── Selector de fondo (Ajustes) ─────────────────────────────────
+   Cada opción enseña el color de verdad con una tarjeta encima, que
+   es lo que se va a ver. Un círculo de color no diría si pinta el
+   fondo o los botones. */
+
+.bg-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.bg-opt {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.bg-prev {
+  position: relative;
+  height: 54px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.bg-prev-card {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 24px;
+  height: 20px;
+  border-radius: 6px;
+}
+
+.bg-opt:hover .bg-prev { border-color: var(--text-3); }
+.bg-opt[aria-pressed="true"] .bg-prev {
+  border: 2.5px solid var(--green);
+}
+
+.bg-opt > span {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.bg-opt[aria-pressed="true"] > span {
+  color: var(--text);
+  font-weight: 600;
+}
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }

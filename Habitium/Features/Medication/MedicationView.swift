@@ -31,7 +31,7 @@ struct MedicationView: View {
                 ProgressView().padding(.top, 60)
             }
         }
-        .background(Theme.Colors.screenBackground)
+        .themedBackground()
         .navigationTitle("Medicación")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

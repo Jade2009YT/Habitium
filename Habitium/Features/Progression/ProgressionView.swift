@@ -32,7 +32,7 @@ struct ProgressionView: View {
                 SwiftUI.ProgressView().padding(.top, 60)
             }
         }
-        .background(Theme.Colors.screenBackground)
+        .themedBackground()
         .navigationTitle("Progreso")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {

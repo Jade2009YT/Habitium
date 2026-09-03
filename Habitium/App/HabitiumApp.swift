@@ -23,6 +23,9 @@ struct HabitiumApp: App {
     @State private var emailAuth = SupabaseAuthManager()
     @State private var localAccess = LocalAccessManager()
     @State private var lockManager = AppLockManager()
+    // El fondo elegido. Vive aquí arriba porque tiene que repintar la
+    // app entera —pestañas incluidas— en cuanto se toca en Ajustes.
+    @State private var appearance = AppearanceStore()
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -39,6 +42,7 @@ struct HabitiumApp: App {
                 .environment(emailAuth)
                 .environment(localAccess)
                 .environment(lockManager)
+                .environment(appearance)
                 .task {
                     NotificationScheduler.shared.requestAuthorizationIfNeeded()
                     WatchConnectivityBridge.shared.onWorkoutSetsReceived = { sets in

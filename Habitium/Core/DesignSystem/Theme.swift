@@ -31,6 +31,10 @@ enum Theme {
         static let danger = Color(red: 0.86, green: 0.15, blue: 0.15)
         static let streak = Color(red: 0.96, green: 0.55, blue: 0.10)
 
+        // Los fondos del sistema. Son el punto de partida y lo que se
+        // ve con el tema "Automático"; el fondo elegido en Ajustes los
+        // sustituye (ver BackgroundTheme). Se siguen usando donde hace
+        // falta un color fijo fuera del árbol de vistas.
         static let cardBackground = Color(.secondarySystemGroupedBackground)
         static let screenBackground = Color(.systemGroupedBackground)
 
@@ -69,15 +73,30 @@ enum Theme {
 
 /// Contenedor base de todas las tarjetas. La sombra es muy suave a
 /// propósito: separa la tarjeta del fondo sin que parezca que flota.
+///
+/// Con un fondo oscuro esa sombra no se ve —negro sobre negro—, así que
+/// ahí la tarjeta se despega con un borde tenue. Es el mismo componente:
+/// quien elige el fondo no tiene que saber nada de esto.
 struct CardBackground: ViewModifier {
+    @Environment(AppearanceStore.self) private var appearance: AppearanceStore?
     var padding: CGFloat = Theme.Layout.cardPadding
+
+    private var theme: BackgroundTheme { appearance?.background ?? .system }
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: Theme.Layout.cornerRadius, style: .continuous)
+    }
 
     func body(content: Content) -> some View {
         content
             .padding(padding)
-            .background(Theme.Colors.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Layout.cornerRadius, style: .continuous))
-            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+            .background(theme.cardColor)
+            .clipShape(shape)
+            .overlay {
+                if let border = theme.cardBorder {
+                    shape.strokeBorder(border, lineWidth: 1)
+                }
+            }
+            .shadow(color: .black.opacity(theme.cardShadowOpacity), radius: 8, x: 0, y: 2)
     }
 }
 

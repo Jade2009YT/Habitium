@@ -31,7 +31,7 @@ struct QuickAddBar: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Theme.Colors.cardBackground)
+        .themedCardFill()
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 

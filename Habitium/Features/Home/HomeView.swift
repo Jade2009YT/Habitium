@@ -47,7 +47,7 @@ struct HomeView: View {
                     .padding(.bottom, 24)
                 }
             }
-            .background(Theme.Colors.screenBackground)
+            .themedBackground()
             .navigationTitle("Habitium")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

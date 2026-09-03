@@ -20,6 +20,7 @@ struct RootView: View {
     @Environment(SupabaseAuthManager.self) private var emailAuth
     @Environment(LocalAccessManager.self) private var localAccess
     @Environment(AppLockManager.self) private var lockManager
+    @Environment(AppearanceStore.self) private var appearance
     @Environment(\.modelContext) private var modelContext
 
     private var hasCheckedAllCredentials: Bool {
@@ -32,7 +33,10 @@ struct RootView: View {
     var body: some View {
         Group {
             if !hasCheckedAllCredentials {
-                Color(.systemBackground).ignoresSafeArea()
+                // El fondo del tema y no Color(.systemBackground): con
+                // "Noche" elegido, ese medio segundo en blanco antes de
+                // que cargue la sesión se ve como un fogonazo.
+                appearance.background.screenColor.ignoresSafeArea()
             } else if isSignedIn {
                 MainTabView()
                     // Una sola vez, en la raíz: los avisos de XP y la
@@ -47,6 +51,9 @@ struct RootView: View {
                 LoginView()
             }
         }
+        // Un único sitio para todo: login, pestañas, hojas y bloqueo.
+        // Con `nil` (tema "Automático") SwiftUI deja mandar al iPhone.
+        .preferredColorScheme(appearance.background.colorScheme)
         .task {
             await authManager.restoreExistingCredential()
             await emailAuth.restoreSession()

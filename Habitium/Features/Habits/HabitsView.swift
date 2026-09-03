@@ -31,7 +31,7 @@ struct HabitsView: View {
                 ProgressView().padding(.top, 60)
             }
         }
-        .background(Theme.Colors.screenBackground)
+        .themedBackground()
         .navigationTitle("Hábitos")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
