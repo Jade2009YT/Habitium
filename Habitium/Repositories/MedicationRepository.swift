@@ -45,9 +45,11 @@ protocol MedicationRepository {
 final class SwiftDataMedicationRepository: MedicationRepository {
 
     private let context: ModelContext
+    private let progression: ProgressionRepository
 
-    init(context: ModelContext) {
+    init(context: ModelContext, progression: ProgressionRepository) {
         self.context = context
+        self.progression = progression
     }
 
     func medications() -> [Medication] {
@@ -134,6 +136,14 @@ final class SwiftDataMedicationRepository: MedicationRepository {
             log.skipped = false
         }
         syncWidgetSnapshot()
+        // La clave identifica la toma exacta (medicamento + hora + día),
+        // así que cada toma se premia una vez. Omitir no da nada, a
+        // propósito: premiaría saltarse la medicación.
+        progression.award(
+            .medicationTaken,
+            dedupeKey: SwiftDataProgressionRepository.key("dose:\(dose.medicationID):\(dose.minuteOfDay)", on: .now),
+            on: .now
+        )
     }
 
     func markDoseSkipped(_ dose: MedicationDose) {

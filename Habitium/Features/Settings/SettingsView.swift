@@ -16,6 +16,7 @@ struct SettingsView: View {
     @Environment(AppLockManager.self) private var lockManager
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: SettingsViewModel?
+    @State private var selectedAccent: AccentTheme = AccentThemeStore.current
 
     var body: some View {
         NavigationStack {
@@ -23,6 +24,7 @@ struct SettingsView: View {
                 if let viewModel {
                     Form {
                         accountSection
+                        appearanceSection
                         securitySection
                         goalsSection(viewModel)
                         adaptiveGoalSection(viewModel)
@@ -46,6 +48,49 @@ struct SettingsView: View {
                     viewModel = SettingsViewModel(container: container)
                 }
             }
+        }
+    }
+
+    /// Los temas que se ganan en el pase de temporada. Los que aún no
+    /// tienes se ven bloqueados en vez de esconderse: saber qué hay más
+    /// adelante es justo lo que hace que apetezca seguir.
+    private var appearanceSection: some View {
+        let unlocked = container.progressionRepository.profile().unlockedRewardIDs
+        let available = SeasonPass.availableAccents(unlockedRewardIDs: unlocked)
+
+        return Section {
+            ForEach(AccentTheme.allCases) { theme in
+                let isAvailable = available.contains(theme)
+                Button {
+                    guard isAvailable else { return }
+                    AccentThemeStore.set(theme)
+                    selectedAccent = theme
+                } label: {
+                    HStack(spacing: 12) {
+                        Circle()
+                            .fill(theme.color)
+                            .frame(width: 22, height: 22)
+                            .opacity(isAvailable ? 1 : 0.3)
+                        Text(theme.displayName)
+                            .foregroundStyle(isAvailable ? .primary : .secondary)
+                        Spacer()
+                        if !isAvailable {
+                            Image(systemName: "lock.fill")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        } else if selectedAccent == theme {
+                            Image(systemName: "checkmark")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(theme.color)
+                        }
+                    }
+                }
+                .disabled(!isAvailable)
+            }
+        } header: {
+            Text("Aspecto")
+        } footer: {
+            Text("Los temas se desbloquean subiendo de nivel en el pase de temporada.")
         }
     }
 

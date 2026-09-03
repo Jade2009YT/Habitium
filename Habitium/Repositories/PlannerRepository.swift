@@ -49,9 +49,11 @@ protocol PlannerRepository {
 final class SwiftDataPlannerRepository: PlannerRepository {
 
     private let context: ModelContext
+    private let progression: ProgressionRepository
 
-    init(context: ModelContext) {
+    init(context: ModelContext, progression: ProgressionRepository) {
         self.context = context
+        self.progression = progression
     }
 
     // MARK: - Tasks
@@ -84,6 +86,17 @@ final class SwiftDataPlannerRepository: PlannerRepository {
         }
         save()
         syncWidgetSnapshot()
+
+        // La clave lleva el id de la tarea (no la fecha): una tarea
+        // concreta se premia una sola vez en su vida, aunque se marque y
+        // desmarque en días distintos.
+        if task.isCompleted {
+            progression.award(
+                task.isFocus ? .focusTaskCompleted : .taskCompleted,
+                dedupeKey: "task:\(task.id)",
+                on: .now
+            )
+        }
     }
 
     func deleteTask(_ task: PlannerTask) {

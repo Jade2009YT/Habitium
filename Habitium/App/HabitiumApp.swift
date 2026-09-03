@@ -56,6 +56,9 @@ struct HabitiumApp: App {
                     container.financeRepository.applyDueRecurringTransactions()
                     deepLinkCoordinator.checkForPendingLink()
                     lockManager.lockIfNeeded()
+                    // Cuenta el día y actualiza la racha. Es idempotente:
+                    // abrir la app diez veces hoy solo cuenta una.
+                    container.progressionRepository.registerDailyLogin(on: .now)
                 }
         }
         .modelContainer(persistence.container)
@@ -67,6 +70,10 @@ struct HabitiumApp: App {
                 container.financeRepository.applyDueRecurringTransactions()
                 deepLinkCoordinator.checkForPendingLink()
                 lockManager.lockIfNeeded()
+                // Volver a primer plano al día siguiente sin haber cerrado
+                // la app también cuenta como el día nuevo — si no, quien
+                // nunca la cierra perdería la racha.
+                container.progressionRepository.registerDailyLogin(on: .now)
                 // No-op if not signed in via Supabase (see CloudSyncService's
                 // Apple-only disclaimer) or already mid-sync.
                 Task { await CloudSyncService.shared.syncAll(context: persistence.container.mainContext) }

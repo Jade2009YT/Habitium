@@ -83,6 +83,9 @@ final class CloudSyncService {
         await syncMedications(client: client, context: context)
         await syncMedicationDoseLogs(client: client, context: context)
 
+        await syncXPEvents(client: client, context: context)
+        await syncPlayerProfile(client: client, context: context)
+
         await syncUserSettings(client: client, context: context)
 
         lastSyncedAt = .now
@@ -662,6 +665,93 @@ final class CloudSyncService {
                 MedicationDoseLogDTO(id: log.id, medicationID: log.medicationID, date: log.date, minuteOfDay: log.minuteOfDay, takenAt: log.takenAt, skipped: log.skipped, updatedAt: log.updatedAt)
             }
         )
+    }
+
+    // MARK: - Progresión
+
+    /// Los eventos de XP son inmutables una vez creados, así que aquí no
+    /// hay conflictos que resolver: o existe la fila o no.
+    ///
+    /// Nota sobre `unique (user_id, dedupe_key)` en el esquema: si dos
+    /// dispositivos sin conexión premian lo mismo (el mismo hábito el
+    /// mismo día), generan filas con ids distintos y la segunda subida
+    /// falla contra esa restricción. Es lo correcto — impide que el XP
+    /// duplicado se consolide en la nube — y el fallo solo se registra en
+    /// consola. La consecuencia menor es que el total local del segundo
+    /// dispositivo llevará esa concesión de más hasta que gane el perfil
+    /// del otro; a la escala de esta app es aceptable, y la alternativa
+    /// (transacciones distribuidas) no lo es.
+    private func syncXPEvents(client: SupabaseClient, context: ModelContext) async {
+        await reconcile(
+            table: "xp_events",
+            client: client,
+            context: context,
+            fetchLocal: { (try? context.fetch(FetchDescriptor<XPEvent>())) ?? [] },
+            localID: { $0.id },
+            localUpdatedAt: { $0.updatedAt },
+            dtoID: { $0.id },
+            dtoUpdatedAt: { $0.updatedAt },
+            makeLocal: { dto in
+                XPEvent(
+                    id: dto.id,
+                    source: XPSource(rawValue: dto.source) ?? .dailyLogin,
+                    amount: dto.amount,
+                    date: dto.date,
+                    dedupeKey: dto.dedupeKey,
+                    updatedAt: dto.updatedAt
+                )
+            },
+            applyRemote: { dto, local in
+                local.source = dto.source
+                local.amount = dto.amount
+                local.date = dto.date
+                local.dedupeKey = dto.dedupeKey
+                local.updatedAt = dto.updatedAt
+            },
+            toDTO: { event in
+                XPEventDTO(
+                    id: event.id,
+                    source: event.source,
+                    amount: event.amount,
+                    date: event.date,
+                    dedupeKey: event.dedupeKey,
+                    updatedAt: event.updatedAt
+                )
+            }
+        )
+    }
+
+    private func syncPlayerProfile(client: SupabaseClient, context: ModelContext) async {
+        guard let profile = try? context.fetch(FetchDescriptor<PlayerProfile>()).first else { return }
+        await syncSingleton(
+            table: "player_profiles",
+            client: client,
+            dtoUpdatedAt: { $0.updatedAt },
+            localUpdatedAt: { profile.updatedAt },
+            applyRemote: { dto in
+                profile.totalXP = dto.totalXP
+                profile.loginStreak = dto.loginStreak
+                profile.longestLoginStreak = dto.longestLoginStreak
+                profile.lastLoginDate = dto.lastLoginDate
+                profile.seasonID = dto.seasonID
+                profile.seasonXP = dto.seasonXP
+                profile.unlockedRewardIDs = dto.unlockedRewardIDs
+                profile.updatedAt = dto.updatedAt
+            },
+            currentDTO: {
+                PlayerProfileDTO(
+                    totalXP: profile.totalXP,
+                    loginStreak: profile.loginStreak,
+                    longestLoginStreak: profile.longestLoginStreak,
+                    lastLoginDate: profile.lastLoginDate,
+                    seasonID: profile.seasonID,
+                    seasonXP: profile.seasonXP,
+                    unlockedRewardIDs: profile.unlockedRewardIDs,
+                    updatedAt: profile.updatedAt
+                )
+            }
+        )
+        try? context.save()
     }
 
     // MARK: - Singletons (nutrition_goals, budget_settings, user_settings)

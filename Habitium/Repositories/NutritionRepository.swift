@@ -51,9 +51,11 @@ protocol NutritionRepository {
 final class SwiftDataNutritionRepository: NutritionRepository {
 
     private let context: ModelContext
+    private let progression: ProgressionRepository
 
-    init(context: ModelContext) {
+    init(context: ModelContext, progression: ProgressionRepository) {
         self.context = context
+        self.progression = progression
     }
 
     func entries(on date: Date) -> [FoodEntry] {
@@ -78,6 +80,9 @@ final class SwiftDataNutritionRepository: NutritionRepository {
         context.insert(entry)
         save()
         syncWidgetSnapshot()
+        // Por comida concreta, no por día: registrar las tres comidas del
+        // día debe premiar tres veces.
+        progression.award(.mealLogged, dedupeKey: "meal:\(entry.id)", on: entry.date)
     }
 
     func deleteEntry(_ entry: FoodEntry) {
@@ -126,6 +131,9 @@ final class SwiftDataNutritionRepository: NutritionRepository {
     func addWeightEntry(_ entry: WeightEntry) {
         context.insert(entry)
         save()
+        // Aquí sí por día: pesarse cinco veces la misma mañana no debe
+        // dar cinco veces la experiencia.
+        progression.award(.weightLogged, dedupeKey: SwiftDataProgressionRepository.key("weight", on: entry.date), on: entry.date)
     }
 
     func weightEntries(limit: Int) -> [WeightEntry] {

@@ -29,6 +29,7 @@ struct HomeView: View {
                 if let viewModel {
                     VStack(spacing: Theme.Layout.sectionSpacing) {
                         greeting
+                        levelCard(viewModel)
                         caloriesCard(viewModel)
 
                         if !viewModel.focusTasks.isEmpty {
@@ -96,6 +97,54 @@ struct HomeView: View {
         default: "Buenas noches"
         }
         return name.map { "\(salutation), \($0)" } ?? salutation
+    }
+
+    // MARK: - Nivel y racha
+
+    /// La primera tarjeta después del saludo a propósito: el nivel y la
+    /// racha son lo que hace volver mañana, así que se ven antes que
+    /// cualquier número de nutrición o dinero.
+    private func levelCard(_ viewModel: HomeViewModel) -> some View {
+        NavigationLink {
+            ProgressionView()
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    RingProgress(
+                        progress: viewModel.levelProgress,
+                        color: Theme.Colors.habits,
+                        lineWidth: 7,
+                        size: 58
+                    )
+                    Text("\(viewModel.level)")
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .contentTransition(.numericText())
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(viewModel.levelTitle)
+                        .font(.subheadline.weight(.bold))
+                    Text("\(viewModel.xpToNextLevel) XP para el nivel \(viewModel.level + 1)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 0)
+
+                if viewModel.loginStreak > 0 {
+                    VStack(spacing: 3) {
+                        StreakBadge(days: viewModel.loginStreak)
+                        Text("racha")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+
+                DisclosureChevron()
+            }
+            .cardStyle()
+        }
+        .pressable()
     }
 
     // MARK: - Calorías (tarjeta destacada, con anillo)

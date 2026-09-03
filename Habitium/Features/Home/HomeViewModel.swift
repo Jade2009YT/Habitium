@@ -26,6 +26,15 @@ final class HomeViewModel {
     private(set) var pendingMedicationDoses: [MedicationDose] = []
     private(set) var habitStatuses: [HabitStatus] = []
 
+    // Progresión — alimenta la tarjeta de nivel/racha de Inicio.
+    private(set) var totalXP: Int = 0
+    private(set) var loginStreak: Int = 0
+
+    var level: Int { ProgressionEngine.level(forTotalXP: totalXP) }
+    var levelTitle: String { ProgressionEngine.title(forLevel: level) }
+    var levelProgress: Double { ProgressionEngine.progressWithinLevel(totalXP: totalXP) }
+    var xpToNextLevel: Int { ProgressionEngine.xpRemainingToNextLevel(totalXP: totalXP) }
+
     private let container: AppDependencyContainer
 
     init(container: AppDependencyContainer) {
@@ -40,6 +49,10 @@ final class HomeViewModel {
         focusTasks = container.plannerRepository.focusTasks()
         pendingMedicationDoses = container.medicationRepository.todaysDoses().filter { $0.isPending }
         habitStatuses = container.habitRepository.todaysStatuses()
+
+        let profile = container.progressionRepository.profile()
+        totalXP = profile.totalXP
+        loginStreak = profile.loginStreak
     }
 
     func toggleFocusTask(_ task: PlannerTask) {

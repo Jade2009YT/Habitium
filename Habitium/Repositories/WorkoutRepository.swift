@@ -24,10 +24,12 @@ final class SwiftDataWorkoutRepository: WorkoutRepository {
 
     private let context: ModelContext
     private let habitRepository: HabitRepository
+    private let progression: ProgressionRepository
 
-    init(context: ModelContext, habitRepository: HabitRepository) {
+    init(context: ModelContext, habitRepository: HabitRepository, progression: ProgressionRepository) {
         self.context = context
         self.habitRepository = habitRepository
+        self.progression = progression
     }
 
     func save(_ sets: [LoggedWorkoutSet]) {
@@ -48,6 +50,15 @@ final class SwiftDataWorkoutRepository: WorkoutRepository {
         for habit in habitRepository.habits() where habit.linkedToWorkouts && habit.isActive {
             habitRepository.markCompletedToday(habit)
         }
+
+        // Un entrenamiento al día, no una serie: si diera por serie,
+        // lo óptimo sería trocear el entreno en veinte series de una.
+        let day = sets.first?.date ?? .now
+        progression.award(
+            .workoutLogged,
+            dedupeKey: SwiftDataProgressionRepository.key("workout", on: day),
+            on: day
+        )
     }
 
     func recentSets(limit: Int = 20) -> [WorkoutSet] {

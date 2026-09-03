@@ -322,6 +322,47 @@ struct MedicationDoseLogDTO: Codable, Sendable {
     }
 }
 
+// MARK: - Progresión
+
+/// Singleton — ver NutritionGoalDTO. El nivel es de la cuenta, no del
+/// dispositivo: cambiar de móvil no debe costarte la racha.
+struct PlayerProfileDTO: Codable, Sendable {
+    var totalXP: Int
+    var loginStreak: Int
+    var longestLoginStreak: Int
+    var lastLoginDate: Date?
+    var seasonID: String
+    var seasonXP: Int
+    var unlockedRewardIDs: [String]
+    var updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case totalXP = "total_xp"
+        case loginStreak = "login_streak"
+        case longestLoginStreak = "longest_login_streak"
+        case lastLoginDate = "last_login_date"
+        case seasonID = "season_id"
+        case seasonXP = "season_xp"
+        case unlockedRewardIDs = "unlocked_reward_ids"
+        case updatedAt = "updated_at"
+    }
+}
+
+struct XPEventDTO: Codable, Sendable {
+    var id: UUID
+    var source: String
+    var amount: Int
+    var date: Date
+    var dedupeKey: String
+    var updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, source, amount, date
+        case dedupeKey = "dedupe_key"
+        case updatedAt = "updated_at"
+    }
+}
+
 // MARK: - Preferencias (singleton)
 
 struct UserSettingsDTO: Codable, Sendable {

@@ -52,7 +52,9 @@ final class PersistenceController {
             HabitLog.self,
             UserSettings.self,
             WorkoutSet.self,
-            PendingCloudDeletion.self
+            PendingCloudDeletion.self,
+            PlayerProfile.self,
+            XPEvent.self
         ])
 
         let configuration: ModelConfiguration
@@ -125,7 +127,9 @@ final class PersistenceController {
             HabitLog.self,
             UserSettings.self,
             WorkoutSet.self,
-            PendingCloudDeletion.self
+            PendingCloudDeletion.self,
+            PlayerProfile.self,
+            XPEvent.self
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory)
         do {

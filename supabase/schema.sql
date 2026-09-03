@@ -251,6 +251,39 @@ create table if not exists public.workout_sets (
 );
 
 -- =========================================================================
+-- Progresión (nivel, racha, pase de temporada)
+-- =========================================================================
+
+-- Singleton por cuenta: tu nivel es tuyo, no de un dispositivo.
+create table if not exists public.player_profiles (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null unique default auth.uid() references auth.users(id) on delete cascade,
+  total_xp integer not null default 0,
+  login_streak integer not null default 0,
+  longest_login_streak integer not null default 0,
+  last_login_date timestamptz,
+  season_id text not null default '',
+  season_xp integer not null default 0,
+  unlocked_reward_ids text[] not null default '{}',
+  updated_at timestamptz not null default now()
+);
+
+-- Cada concesión de experiencia. dedupe_key es lo que impide premiar dos
+-- veces lo mismo, así que es única por usuario: sin esa restricción, dos
+-- dispositivos sin conexión podrían premiar el mismo hábito del mismo día
+-- y al sincronizar acabarían sumando XP duplicado.
+create table if not exists public.xp_events (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  source text not null,
+  amount integer not null,
+  date timestamptz not null,
+  dedupe_key text not null,
+  updated_at timestamptz not null default now(),
+  unique (user_id, dedupe_key)
+);
+
+-- =========================================================================
 -- Preferencias del usuario (singleton por cuenta)
 -- =========================================================================
 
@@ -280,6 +313,7 @@ begin
     'medications', 'medication_dose_logs',
     'habits', 'habit_logs',
     'workout_sets',
+    'player_profiles', 'xp_events',
     'user_settings'
   ]
   loop
@@ -302,3 +336,4 @@ create index if not exists planner_events_user_start_idx on public.planner_event
 create index if not exists habit_logs_user_date_idx on public.habit_logs (user_id, date);
 create index if not exists medication_dose_logs_user_date_idx on public.medication_dose_logs (user_id, date);
 create index if not exists weight_entries_user_date_idx on public.weight_entries (user_id, date);
+create index if not exists xp_events_user_date_idx on public.xp_events (user_id, date);

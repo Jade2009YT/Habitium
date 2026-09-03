@@ -21,6 +21,10 @@ final class AppDependencyContainer {
     let medicationRepository: MedicationRepository
     let habitRepository: HabitRepository
     let workoutRepository: WorkoutRepository
+    /// Se construye antes que los demás: varios repositorios le conceden
+    /// experiencia al escribir, así que tiene que existir ya cuando se
+    /// crean ellos.
+    let progressionRepository: ProgressionRepository
     /// StoreKit scaffold for a possible future "Habitium Pro" subscription.
     /// Nothing in the app currently checks `isProActive` — everything is
     /// unlocked for personal use.
@@ -30,12 +34,20 @@ final class AppDependencyContainer {
 
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
-        self.nutritionRepository = SwiftDataNutritionRepository(context: modelContext)
-        self.plannerRepository = SwiftDataPlannerRepository(context: modelContext)
+
+        let progression = SwiftDataProgressionRepository(context: modelContext)
+        self.progressionRepository = progression
+
+        self.nutritionRepository = SwiftDataNutritionRepository(context: modelContext, progression: progression)
+        self.plannerRepository = SwiftDataPlannerRepository(context: modelContext, progression: progression)
         self.financeRepository = SwiftDataFinanceRepository(context: modelContext)
-        self.medicationRepository = SwiftDataMedicationRepository(context: modelContext)
-        self.habitRepository = SwiftDataHabitRepository(context: modelContext)
-        self.workoutRepository = SwiftDataWorkoutRepository(context: modelContext, habitRepository: self.habitRepository)
+        self.medicationRepository = SwiftDataMedicationRepository(context: modelContext, progression: progression)
+        self.habitRepository = SwiftDataHabitRepository(context: modelContext, progression: progression)
+        self.workoutRepository = SwiftDataWorkoutRepository(
+            context: modelContext,
+            habitRepository: self.habitRepository,
+            progression: progression
+        )
     }
 
     // MARK: - Use case factories

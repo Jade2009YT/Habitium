@@ -59,9 +59,11 @@ protocol HabitRepository {
 final class SwiftDataHabitRepository: HabitRepository {
 
     private let context: ModelContext
+    private let progression: ProgressionRepository
 
-    init(context: ModelContext) {
+    init(context: ModelContext, progression: ProgressionRepository) {
         self.context = context
+        self.progression = progression
     }
 
     func habits() -> [Habit] {
@@ -126,6 +128,9 @@ final class SwiftDataHabitRepository: HabitRepository {
         log.isCompleted.toggle()
         log.updatedAt = .now
         save()
+        // Solo se premia al marcar, nunca al desmarcar: quitar XP por
+        // corregir un toque haría que la gente evitara tocar la app.
+        if log.isCompleted { awardXP(for: habit, on: today) }
     }
 
     func logValue(_ habit: Habit, value: Double) {
@@ -135,6 +140,7 @@ final class SwiftDataHabitRepository: HabitRepository {
         log.isCompleted = true // a logged number counts as "done" for the day, goal met or not
         log.updatedAt = .now
         save()
+        awardXP(for: habit, on: today)
     }
 
     func markCompletedToday(_ habit: Habit) {
@@ -144,6 +150,27 @@ final class SwiftDataHabitRepository: HabitRepository {
         log.isCompleted = true
         log.updatedAt = .now
         save()
+        awardXP(for: habit, on: today)
+    }
+
+    /// Experiencia por el hábito y, si con este se cierra el día entero,
+    /// la bonificación de "todos los hábitos". Las claves incluyen la
+    /// fecha, así que cada cosa se premia una vez al día como mucho.
+    private func awardXP(for habit: Habit, on day: Date) {
+        progression.award(
+            .habitCompleted,
+            dedupeKey: SwiftDataProgressionRepository.key("habit:\(habit.id)", on: day),
+            on: day
+        )
+
+        let statuses = todaysStatuses()
+        if !statuses.isEmpty && statuses.allSatisfy(\.isGoalMetToday) {
+            progression.award(
+                .allHabitsCompleted,
+                dedupeKey: SwiftDataProgressionRepository.key("all-habits", on: day),
+                on: day
+            )
+        }
     }
 
     // MARK: - Private
