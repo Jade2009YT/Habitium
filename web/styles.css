@@ -554,6 +554,10 @@ input[type="date"] { min-height: 42px; }
 .stat-sub { margin-top: 5px; font-size: 13px; color: var(--text-2); }
 
 .track {
+  /* display explícito porque la barra también se usa dentro de un
+     <button> como <span> (la tarjeta de nivel de Inicio): sin esto se
+     quedaría en línea y la altura no se aplicaría. */
+  display: block;
   height: 6px;
   margin-top: 12px;
   background: var(--bg);
@@ -561,6 +565,7 @@ input[type="date"] { min-height: 42px; }
   overflow: hidden;
 }
 .track-fill {
+  display: block;
   height: 100%;
   width: 0;
   border-radius: 999px;
@@ -792,6 +797,361 @@ input[type="date"] { min-height: 42px; }
 .tab span { font-size: 18px; line-height: 1; }
 .tab.is-active { color: var(--green); font-weight: 600; }
 
+/* ═══════════════ Progresión ═══════════════════════════════════════
+   Nivel, racha, retos del día y pase. Es la parte que hace que abrir la
+   app un martes cualquiera tenga sentido aunque no haya nada que
+   apuntar. */
+
+/* ── Tarjeta de nivel en Inicio ───────────────────────────────── */
+
+.level-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  margin-bottom: 14px;
+}
+
+.level-badge {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--purple), color-mix(in srgb, var(--purple) 72%, transparent));
+  color: #fff;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  line-height: 1;
+}
+.level-badge strong { font-size: 22px; font-weight: 800; }
+.level-badge small { font-size: 8px; font-weight: 700; letter-spacing: 1px; opacity: 0.85; }
+
+.level-main { flex: 1 1 auto; display: grid; gap: 6px; min-width: 0; }
+.level-title { font-size: 15px; font-weight: 700; }
+/* La barra ya va separada por el gap de la rejilla; su margen de serie
+   la despegaría el doble. */
+.level-main .track { margin-top: 0; }
+.level-main .stat-sub { margin: 0; }
+
+.streak-pill {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--orange);
+  background: var(--orange-soft);
+  padding: 5px 10px;
+  border-radius: 999px;
+}
+
+.chev { color: var(--text-3); font-size: 20px; flex: 0 0 auto; }
+
+/* ── Retos del día ────────────────────────────────────────────── */
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.card-head h2 { margin: 0; }
+
+/* .pill ya está definida más arriba (junto a .section-title) y sirve
+   igual aquí: no se redefine para no tener dos verdades. */
+
+.challenge-list { list-style: none; margin: 12px 0 0 0; padding: 0; display: grid; gap: 8px; }
+
+.challenge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  transition: background 0.2s, border-color 0.2s;
+}
+.challenge.is-done {
+  background: var(--green-soft);
+  border-color: color-mix(in srgb, var(--green) 35%, transparent);
+}
+.challenge-icon { font-size: 15px; flex: 0 0 auto; }
+.challenge-name { flex: 1 1 auto; font-size: 14px; font-weight: 600; min-width: 0; }
+.challenge.is-done .challenge-name { color: var(--green); }
+.challenge-count { font-size: 12px; font-weight: 700; color: var(--text-3); flex: 0 0 auto; }
+
+/* ── Pantalla de Progreso ─────────────────────────────────────── */
+
+.progress-hero { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.level-ring-wrap { position: relative; width: 128px; height: 128px; flex: 0 0 auto; }
+.ring-lg { width: 128px; height: 128px; }
+.ring-progress.purple { stroke: var(--purple); }
+.progress-hero-side { flex: 1 1 220px; display: grid; gap: 8px; }
+.progress-hero-side h2 { margin: 0; font-size: 20px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.chip b { color: var(--text); }
+.chip-streak { color: var(--orange); background: var(--orange-soft); border-color: transparent; }
+.chip-streak b { color: var(--orange); }
+
+/* Gráfico de la semana: siete barras. Sin biblioteca. */
+.xp-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  align-items: end;
+  height: 116px;
+  margin-top: 12px;
+}
+/* Columna en flex y NO en grid: en grid la fila se autoajusta al
+   contenido, así que la altura en porcentaje de la barra no tenía
+   contra qué resolverse y todas salían planas. Aquí la altura la pone
+   JavaScript en píxeles, que no depende de nada. */
+.xp-day {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 5px;
+  height: 100%;
+}
+.xp-bar {
+  width: 100%;
+  max-width: 34px;
+  border-radius: 6px 6px 3px 3px;
+  background: var(--purple);
+  min-height: 3px;
+  flex: 0 0 auto;
+  transition: height 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.xp-day.is-empty .xp-bar { background: var(--border); }
+.xp-day.is-today .xp-bar { background: var(--green); }
+.xp-day-label { font-size: 10px; color: var(--text-3); }
+.xp-day-value { font-size: 10px; font-weight: 700; color: var(--text-2); }
+
+/* Niveles del pase */
+.tier-list { list-style: none; margin: 12px 0 0 0; padding: 0; display: grid; gap: 8px; }
+.tier {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.tier.is-unlocked { border-color: color-mix(in srgb, var(--green) 40%, transparent); background: var(--green-soft); }
+.tier.is-next { border-color: color-mix(in srgb, var(--purple) 45%, transparent); }
+.tier-icon { font-size: 17px; flex: 0 0 auto; filter: grayscale(1); opacity: 0.45; }
+.tier.is-unlocked .tier-icon { filter: none; opacity: 1; }
+/* Rejilla y no un span suelto: los dos textos de dentro son <span> y sin
+   esto saldrían pegados en la misma línea. */
+.tier-body { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
+.tier-name { font-size: 14px; font-weight: 600; }
+.tier-req { font-size: 11px; color: var(--text-3); }
+.tier-state { font-size: 11px; font-weight: 700; color: var(--text-3); flex: 0 0 auto; }
+.tier.is-unlocked .tier-state { color: var(--green); }
+
+/* Selector de acento */
+.accent-picker { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.accent-opt {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  width: 62px;
+}
+.accent-dot {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  box-shadow: 0 0 0 1px var(--border) inset;
+  display: grid;
+  place-content: center;
+  font-size: 13px;
+  color: #fff;
+  transition: transform 0.15s;
+}
+.accent-opt:hover .accent-dot { transform: scale(1.08); }
+.accent-opt[aria-pressed="true"] .accent-dot { border-color: var(--text); }
+.accent-opt[disabled] { cursor: not-allowed; }
+.accent-opt[disabled] .accent-dot { opacity: 0.3; }
+.accent-opt span { font-size: 11px; color: var(--text-2); text-align: center; }
+
+/* ── Aviso de XP ──────────────────────────────────────────────── */
+
+.xp-toast {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--green);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 6px 20px rgba(16, 24, 40, 0.22);
+  animation: toast-in 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  transform: translateX(-50%);
+}
+.xp-toast.is-leaving { animation: toast-out 0.28s ease-in forwards; }
+.xp-toast small { font-weight: 500; opacity: 0.9; }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, -22px) scale(0.94); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+@keyframes toast-out {
+  to { opacity: 0; transform: translate(-50%, -18px) scale(0.96); }
+}
+
+/* ── Subida de nivel ──────────────────────────────────────────── */
+
+.levelup {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+  animation: fade-in 0.25s ease-out;
+}
+
+.levelup-panel {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+  padding: 30px 26px 24px;
+  border-radius: 22px;
+  background: var(--surface);
+  max-width: 320px;
+  width: 100%;
+  animation: pop-in 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.levelup-badge {
+  width: 84px;
+  height: 84px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--purple), color-mix(in srgb, var(--purple) 70%, transparent));
+  color: #fff;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  line-height: 1;
+  box-shadow: 0 0 0 10px color-mix(in srgb, var(--purple) 18%, transparent);
+}
+.levelup-badge strong { font-size: 34px; font-weight: 800; }
+.levelup-badge small { font-size: 9px; font-weight: 700; letter-spacing: 1.4px; opacity: 0.9; }
+
+.levelup-h { margin: 0; font-size: 19px; font-weight: 700; }
+.levelup-sub { margin: 0; font-size: 15px; font-weight: 600; color: var(--purple); }
+.levelup-rewards { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; width: 100%; }
+.levelup-rewards li {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+/* El confeti son 40 trozos colocados por JS. Caen y giran a la vez. */
+.levelup-confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.confetti-bit {
+  position: absolute;
+  top: -20px;
+  width: 8px;
+  height: 13px;
+  border-radius: 2px;
+  animation: confetti-fall linear forwards;
+}
+
+@keyframes confetti-fall {
+  from { transform: translateY(-30px) rotate(0deg); opacity: 1; }
+  to { transform: translateY(105vh) rotate(720deg); opacity: 0.15; }
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.86) translateY(14px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ── Movimiento general ───────────────────────────────────────── */
+
+/* Las tarjetas entran escalonadas al cambiar de pantalla. Es lo que
+   separa "una web" de "una app": el contenido llega, no aparece de
+   golpe. El retardo se corta a la sexta para que la última tarjeta no
+   se haga esperar medio segundo. */
+.view:not([hidden]) > .card,
+.view:not([hidden]) > .grid > .card {
+  animation: rise-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.view:not([hidden]) > .card:nth-child(2),
+.view:not([hidden]) > .grid > .card:nth-child(2) { animation-delay: 0.04s; }
+.view:not([hidden]) > .card:nth-child(3),
+.view:not([hidden]) > .grid > .card:nth-child(3) { animation-delay: 0.08s; }
+.view:not([hidden]) > .card:nth-child(4),
+.view:not([hidden]) > .grid > .card:nth-child(4) { animation-delay: 0.12s; }
+.view:not([hidden]) > .card:nth-child(5),
+.view:not([hidden]) > .grid > .card:nth-child(5) { animation-delay: 0.16s; }
+.view:not([hidden]) > .card:nth-child(n + 6),
+.view:not([hidden]) > .grid > .card:nth-child(n + 6) { animation-delay: 0.2s; }
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* El anillo se llena al entrar en vez de aparecer ya lleno. */
+.ring-progress { transition: stroke-dashoffset 0.8s cubic-bezier(0.22, 1, 0.36, 1); }
+.track-fill { transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+
+/* Marcar algo tiene que notarse en el dedo, no solo en la pantalla. */
+.check { transition: transform 0.12s ease-out; }
+.check:active { transform: scale(0.88); }
+.check.is-checked { animation: check-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes check-pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+
+.is-link { transition: transform 0.15s ease-out, box-shadow 0.15s ease-out; }
+.is-link:active { transform: scale(0.985); }
+
 /* ── Selector de fondo (Ajustes) ─────────────────────────────────
    Cada opción enseña el color de verdad con una tarjeta encima, que
    es lo que se va a ver. Un círculo de color no diría si pinta el
@@ -847,6 +1207,53 @@ input[type="date"] { min-height: 42px; }
   font-weight: 600;
 }
 
+/* Texto secundario más pequeño, para las notas bajo un título. */
+.muted.sm { font-size: 12px; }
+
+/* Formulario de una sola línea, sin el peso visual del compositor de
+   comidas: es un campo secundario dentro de la misma pantalla. */
+.composer-slim { padding: 10px 12px; }
+.composer-slim .pill { margin-left: auto; align-self: center; }
+
+/* ── Acento elegible (se gana en el pase) ────────────────────────
+   Redefine --green, que es el color principal de toda la web: barras,
+   pestaña activa, botones, anillo de calorías. Un solo atributo en el
+   <html> y la app entera cambia de color. */
+
+:root[data-accent="ocean"] { --green: #0d8cc7; --green-soft: #d6eefa; }
+:root[data-accent="sunset"] { --green: #f26b3d; --green-soft: #ffe6dc; }
+:root[data-accent="forest"] { --green: #2e7347; --green-soft: #dcece2; }
+:root[data-accent="grape"] { --green: #8c3db3; --green-soft: #f1e2f8; }
+:root[data-accent="midnight"] { --green: #384273; --green-soft: #e0e3f0; }
+
+:root[data-bg="graphite"][data-accent="ocean"],
+:root[data-bg="night"][data-accent="ocean"] { --green-soft: #0c2b3a; }
+:root[data-bg="graphite"][data-accent="sunset"],
+:root[data-bg="night"][data-accent="sunset"] { --green-soft: #3a1e12; }
+:root[data-bg="graphite"][data-accent="forest"],
+:root[data-bg="night"][data-accent="forest"] { --green-soft: #12281b; }
+:root[data-bg="graphite"][data-accent="grape"],
+:root[data-bg="night"][data-accent="grape"] { --green-soft: #2b1136; }
+:root[data-bg="graphite"][data-accent="midnight"],
+:root[data-bg="night"][data-accent="midnight"] { --green-soft: #171b30; }
+
+@media (prefers-color-scheme: dark) {
+  :root[data-bg="system"][data-accent="ocean"] { --green-soft: #0c2b3a; }
+  :root[data-bg="system"][data-accent="sunset"] { --green-soft: #3a1e12; }
+  :root[data-bg="system"][data-accent="forest"] { --green-soft: #12281b; }
+  :root[data-bg="system"][data-accent="grape"] { --green-soft: #2b1136; }
+  :root[data-bg="system"][data-accent="midnight"] { --green-soft: #171b30; }
+}
+
+/* Quien pide menos movimiento no quiere "menos transiciones": quiere que
+   nada se mueva. Por eso van también las animaciones, no solo las
+   transiciones — el confeti y las entradas escalonadas son justamente lo
+   que molesta a quien activa este ajuste. */
 @media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; }
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
 }

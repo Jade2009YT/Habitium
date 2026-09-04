@@ -23,7 +23,13 @@
 // cola para siempre.
 
 const DB_NAME = "habitium";
-const DB_VERSION = 1;
+// v2: xp_events + player_profiles (progresión). Subir este número es
+// OBLIGATORIO al añadir una tabla: onupgradeneeded solo se ejecuta
+// cuando la versión cambia, así que sin esto quien ya tuviera la app
+// abierta alguna vez se quedaría sin los almacenes nuevos y fallaría al
+// escribir, mientras que en un navegador nuevo funcionaría. Un fallo que
+// solo le pasa a los que ya la usaban es de los peores de encontrar.
+const DB_VERSION = 2;
 
 /** Tablas replicadas en local. Deben existir en supabase/schema.sql. */
 export const TABLES = [
@@ -40,11 +46,17 @@ export const TABLES = [
   "habits",
   "habit_logs",
   "workout_sets",
+  "xp_events",
 ];
 
 /** Tablas con exactamente una fila por usuario: se emparejan por
  *  user_id, no por id — igual que CloudSyncService.syncSingleton. */
-export const SINGLETONS = ["nutrition_goals", "budget_settings", "user_settings"];
+export const SINGLETONS = [
+  "nutrition_goals",
+  "budget_settings",
+  "user_settings",
+  "player_profiles",
+];
 
 const ALL_TABLES = [...TABLES, ...SINGLETONS];
 const META = "_meta";

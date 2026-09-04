@@ -27,21 +27,24 @@ struct HomeView: View {
         NavigationStack {
             ScrollView {
                 if let viewModel {
+                    // Las tarjetas entran escalonadas, no de golpe: es lo
+                    // que separa "una pantalla que responde" de "una
+                    // página". El índice es su orden en pantalla.
                     VStack(spacing: Theme.Layout.sectionSpacing) {
-                        greeting
-                        levelCard(viewModel)
-                        challengesCard(viewModel)
-                        caloriesCard(viewModel)
+                        greeting.appearIn(0)
+                        levelCard(viewModel).appearIn(1)
+                        challengesCard(viewModel).appearIn(2)
+                        caloriesCard(viewModel).appearIn(3)
 
                         if !viewModel.focusTasks.isEmpty {
-                            focusCard(viewModel)
+                            focusCard(viewModel).appearIn(4)
                         }
                         if !viewModel.habitStatuses.isEmpty {
-                            habitsCard(viewModel)
+                            habitsCard(viewModel).appearIn(5)
                         }
-                        medicationCard(viewModel)
-                        upcomingCard(viewModel)
-                        budgetCard(viewModel)
+                        medicationCard(viewModel).appearIn(6)
+                        upcomingCard(viewModel).appearIn(7)
+                        budgetCard(viewModel).appearIn(8)
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 24)
@@ -233,9 +236,11 @@ struct HomeView: View {
                         // pasaría de 1 y el anillo no se pondría rojo.
                         RingProgress(progress: progress.rawProgress, color: Theme.Colors.nutrition)
                         VStack(spacing: 0) {
-                            Text("\(Int(progress.remainingCalories))")
-                                .font(Theme.Fonts.metric)
-                                .contentTransition(.numericText())
+                            // Cuenta desde 0 al abrir, al ritmo del
+                            // anillo que lo rodea. `.numericText()` solo
+                            // anima el salto de un número al siguiente:
+                            // de 0 a 720 sería un único brinco.
+                            CountingInt(value: Int(progress.remainingCalories))
                             Text("kcal restantes")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)

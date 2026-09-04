@@ -13,6 +13,8 @@
 
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 import * as store from "./store.js";
+import * as player from "./player.js";
+import * as prog from "./progression.js";
 
 const cfg = window.HABITIUM_CONFIG;
 const isConfigured =
@@ -201,6 +203,7 @@ $("sign-out-2").addEventListener("click", doSignOut);
 
 const NAV = [
   { id: "home", label: "Inicio", icon: "🏠" },
+  { id: "progress", label: "Progreso", icon: "🏆" },
   { id: "nutrition", label: "Nutrición", icon: "🍎" },
   { id: "planner", label: "Agenda", icon: "📅" },
   { id: "finance", label: "Finanzas", icon: "💶" },
@@ -209,8 +212,9 @@ const NAV = [
   { id: "settings", label: "Ajustes", icon: "⚙️" },
 ];
 
-// La barra del móvil no puede con 7 destinos sin quedar ilegible;
-// Medicación y Ajustes se alcanzan desde las tarjetas de Inicio.
+// La barra del móvil no puede con 8 destinos sin quedar ilegible.
+// Medicación y Ajustes se alcanzan desde las tarjetas de Inicio, y
+// Progreso desde la tarjeta de nivel que está arriba del todo.
 const MOBILE_TABS = ["home", "nutrition", "planner", "finance", "habits"];
 
 function buildNav() {
@@ -264,6 +268,7 @@ async function render() {
   renderSyncBanner();
   await {
     home: loadHome,
+    progress: loadProgress,
     nutrition: loadNutrition,
     planner: loadPlanner,
     finance: loadFinance,
@@ -304,6 +309,11 @@ async function loadNutrition() {
   const entries = await todaysFood();
   $("food-total").textContent = `${Math.round(entries.reduce((s, e) => s + (e.calories ?? 0), 0))} kcal`;
 
+  const pesos = (await store.all("weight_entries")).sort(byDateDesc);
+  $("weight-last").textContent = pesos.length
+    ? `último: ${pesos[0].weight_kg} kg · ${dayOf(pesos[0].date)}`
+    : "";
+
   const list = $("food-list");
   if (!entries.length) {
     list.innerHTML = `<li class="empty">Aún no has registrado nada hoy.</li>`;
@@ -333,7 +343,7 @@ async function loadNutrition() {
 
 $("food-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  await store.insert("food_entries", {
+  const entry = await store.insert("food_entries", {
     name: $("food-name").value.trim(),
     date: nowISO(),
     meal_type: $("food-meal").value,
@@ -344,6 +354,9 @@ $("food-form").addEventListener("submit", async (e) => {
     fat_grams: Number($("food-fat").value) || 0,
   });
   e.target.reset();
+  // La clave lleva el id de la comida y NO la fecha, igual que en iOS
+  // (NutritionRepository): cada comida se premia una vez en su vida.
+  await awardXP("mealLogged", `meal:${idKey(entry.id)}`);
 });
 
 // ── Agenda ──────────────────────────────────────────────────────────
@@ -387,11 +400,21 @@ function renderTasks(list, tasks, emptyText) {
     .join("");
 
   list.querySelectorAll("[data-toggle]").forEach((btn) => {
-    btn.addEventListener("click", () =>
-      store.update("planner_tasks", btn.dataset.toggle, {
-        is_completed: btn.dataset.done !== "true",
-      })
-    );
+    btn.addEventListener("click", async () => {
+      const completing = btn.dataset.done !== "true";
+      const task = await store.update("planner_tasks", btn.dataset.toggle, {
+        is_completed: completing,
+      });
+      // Solo se premia completar, nunca desmarcar. La clave lleva el id
+      // de la tarea y no la fecha: una tarea concreta se premia una vez
+      // en su vida, aunque se marque y desmarque en días distintos.
+      if (completing && task) {
+        await awardXP(
+          task.is_focus ? "focusTaskCompleted" : "taskCompleted",
+          `task:${idKey(task.id)}`
+        );
+      }
+    });
   });
 
   wireDelete(list, "planner_tasks");
@@ -652,13 +675,36 @@ async function loadHabits() {
 /** Crea o actualiza el registro de HOY para un hábito. */
 async function upsertHabitLog(habitId, fields) {
   const existing = logForToday(await store.all("habit_logs"), habitId);
-  if (existing) return store.update("habit_logs", existing.id, fields);
-  return store.insert("habit_logs", {
-    habit_id: habitId,
-    date: startOfToday().toISOString(),
-    is_completed: false,
-    ...fields,
-  });
+  const log = existing
+    ? await store.update("habit_logs", existing.id, fields)
+    : await store.insert("habit_logs", {
+        habit_id: habitId,
+        date: startOfToday().toISOString(),
+        is_completed: false,
+        ...fields,
+      });
+
+  await awardHabitXP(habitId);
+  return log;
+}
+
+/** Experiencia por cumplir un hábito y, si con este se cierra el día
+ *  entero, la bonificación de "todos los hábitos".
+ *
+ *  Se comprueba el objetivo de verdad (goalMet) y no el simple
+ *  `is_completed`: en un hábito numérico —"bebe 2 litros"— apuntar medio
+ *  litro deja el registro creado pero el objetivo sin cumplir, y premiar
+ *  eso sería premiar el gesto y no el hábito. */
+async function awardHabitXP(habitId) {
+  const { habits, logs } = await fetchHabits();
+  const habit = habits.find((h) => h.id === habitId);
+  if (!habit || !goalMet(habit, logForToday(logs, habitId))) return;
+
+  await awardXP("habitCompleted", prog.dedupeKey(`habit:${idKey(habitId)}`));
+
+  if (habits.length && habits.every((h) => goalMet(h, logForToday(logs, h.id)))) {
+    await awardXP("allHabitsCompleted", prog.dedupeKey("all-habits"));
+  }
 }
 
 $("habit-form").addEventListener("submit", async (e) => {
@@ -763,15 +809,27 @@ async function loadMedication() {
   wireDelete(medList, "medications");
 }
 
-function setDoseTaken(dose, taken) {
+async function setDoseTaken(dose, taken) {
   const fields = { taken_at: taken ? nowISO() : null, skipped: false };
-  if (dose.logId) return store.update("medication_dose_logs", dose.logId, fields);
-  return store.insert("medication_dose_logs", {
-    medication_id: dose.med.id,
-    date: startOfToday().toISOString(),
-    minute_of_day: dose.minute,
-    ...fields,
-  });
+  const log = dose.logId
+    ? await store.update("medication_dose_logs", dose.logId, fields)
+    : await store.insert("medication_dose_logs", {
+        medication_id: dose.med.id,
+        date: startOfToday().toISOString(),
+        minute_of_day: dose.minute,
+        ...fields,
+      });
+
+  // La clave lleva medicamento + hora + día: cada toma concreta se
+  // premia una vez, pero dos tomas del mismo medicamento el mismo día
+  // cuentan por separado.
+  if (taken) {
+    await awardXP(
+      "medicationTaken",
+      prog.dedupeKey(`dose:${idKey(dose.med.id)}:${dose.minute}`)
+    );
+  }
+  return log;
 }
 
 $("med-form").addEventListener("submit", async (e) => {
@@ -939,9 +997,282 @@ function showSaved(form) {
   }, 1400);
 }
 
+// ── Progresión ──────────────────────────────────────────────────────
+//
+// Nivel, racha, retos del día y pase. Todo esto ya existía en el iPhone;
+// aquí está el mismo sistema, con los mismos números y las mismas
+// claves, para que sea UNA cuenta y no dos.
+
+/** Los identificadores dentro de una clave anti-repetición van en
+ *  MAYÚSCULAS.
+ *
+ *  Detalle pequeño y con consecuencias grandes: en Swift, interpolar un
+ *  UUID da "A1B2-…" en mayúsculas, mientras que `crypto.randomUUID()` y
+ *  Postgres los dan en minúsculas. Si la web escribiera la clave en
+ *  minúsculas, "habit:a1b2…:2026-09-04" y "habit:A1B2…:2026-09-04"
+ *  serían dos claves distintas para el MISMO hábito del MISMO día: el
+ *  iPhone y la web premiarían cada uno por su cuenta y al sincronizar
+ *  saldría XP duplicado, sin ningún error que lo delatara. */
+const idKey = (id) => String(id ?? "").toUpperCase();
+
+/** Concede experiencia y lo celebra en pantalla. Todo lo que da puntos
+ *  pasa por aquí. */
+async function awardXP(source, key, date = new Date()) {
+  const award = await player.award(source, key, date);
+  if (award) checkChallengeBonus();
+  return award;
+}
+
+/** Comprueba si los tres retos están hechos y cobra la bonificación.
+ *  Se llama después de cada concesión porque cualquier acción puede
+ *  haber sido la que cerró el tercer reto. */
+async function checkChallengeBonus() {
+  try {
+    await player.awardBonusIfComplete(await challengeCounts());
+  } catch (error) {
+    console.warn("retos:", error);
+  }
+}
+
+/** El progreso de cada tipo de reto, medido contra los datos reales de
+ *  hoy. No se guarda en ningún sitio: un contador aparte sería una
+ *  segunda fuente de verdad que se rompería en cuanto alguien borrase
+ *  una comida. */
+async function challengeCounts() {
+  const today = startOfToday();
+  const isToday = (value) => value && new Date(value) >= today;
+
+  const { habits, logs } = await fetchHabits();
+  const tasks = await store.all("planner_tasks");
+  const completedToday = tasks.filter((t) => t.is_completed && isToday(t.updated_at));
+  const { doses } = await todaysDoses();
+
+  return {
+    habits: habits.filter((h) => goalMet(h, logForToday(logs, h.id))).length,
+    tasks: completedToday.length,
+    focus: completedToday.filter((t) => t.is_focus).length,
+    meals: (await store.all("food_entries")).filter((e) => isToday(e.date)).length,
+    weight: (await store.all("weight_entries")).filter((e) => isToday(e.date)).length,
+    workout: (await store.all("workout_sets")).some((s) => isToday(s.date)) ? 1 : 0,
+    // Sin medicación configurada el reto no aplica; se da por cumplido
+    // en vez de dejarlo imposible para siempre.
+    medication: !doses.length ? 1 : doses.every((d) => d.taken || d.skipped) ? 1 : 0,
+  };
+}
+
+// ── Avisos en pantalla ──────────────────────────────────────────────
+
+let toastTimer = null;
+
+player.onAward((award) => {
+  showXPToast(award);
+  if (award.didLevelUp) showLevelUp(award);
+  render();
+});
+
+function showXPToast(award) {
+  const source = prog.XP_SOURCES[award.source];
+  const toast = $("xp-toast");
+  toast.innerHTML = `<span aria-hidden="true">${source?.icon ?? "⭐"}</span>
+    +${award.amount} XP <small>${esc(source?.name ?? "")}</small>`;
+  toast.hidden = false;
+  toast.classList.remove("is-leaving");
+
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toast.classList.add("is-leaving");
+    setTimeout(() => {
+      toast.hidden = true;
+      toast.classList.remove("is-leaving");
+    }, 280);
+  }, 2200);
+}
+
+function showLevelUp(award) {
+  $("levelup-level").textContent = award.newLevel;
+  $("levelup-name").textContent = prog.titleForLevel(award.newLevel);
+
+  const rewards = award.unlockedTiers
+    .map((id) => prog.SEASON_TIERS.find((t) => t.id === id))
+    .filter(Boolean);
+  $("levelup-rewards").innerHTML = rewards
+    .map((t) => `<li>${t.icon} ${esc(prog.tierRewardName(t))}</li>`)
+    .join("");
+
+  spawnConfetti();
+  $("levelup").hidden = false;
+}
+
+/** Confeti: 40 trozos con posición, color y ritmo distintos. Se generan
+ *  aquí y no en CSS porque hacen falta valores aleatorios por trozo, y
+ *  se borran al cerrar para no dejar 40 animaciones corriendo. */
+function spawnConfetti() {
+  const host = $("levelup-confetti");
+  const colores = ["#7c3aed", "#15a34a", "#f59e0b", "#2563eb", "#db2777"];
+  host.innerHTML = Array.from({ length: 40 }, () => {
+    const left = Math.random() * 100;
+    const delay = Math.random() * 0.5;
+    const dur = 1.6 + Math.random() * 1.4;
+    const color = colores[Math.floor(Math.random() * colores.length)];
+    return `<i class="confetti-bit" style="left:${left}%;background:${color};
+      animation-duration:${dur}s;animation-delay:${delay}s"></i>`;
+  }).join("");
+}
+
+$("levelup-close").addEventListener("click", closeLevelUp);
+$("levelup").addEventListener("click", (e) => {
+  if (e.target === $("levelup")) closeLevelUp();
+});
+
+function closeLevelUp() {
+  $("levelup").hidden = true;
+  $("levelup-confetti").innerHTML = "";
+}
+
+// ── Acento ──────────────────────────────────────────────────────────
+
+const ACCENT_KEY = "habitium.accent";
+
+function currentAccent() {
+  try {
+    const saved = localStorage.getItem(ACCENT_KEY);
+    if (saved && prog.ACCENTS[saved]) return saved;
+  } catch (e) {
+    // Almacenamiento bloqueado.
+  }
+  return "classic";
+}
+
+function applyAccent(id) {
+  // El clásico no pone atributo: así el CSS de :root vale tal cual.
+  if (id === "classic") document.documentElement.removeAttribute("data-accent");
+  else document.documentElement.setAttribute("data-accent", id);
+  try {
+    localStorage.setItem(ACCENT_KEY, id);
+  } catch (e) {
+    // Sin guardar: aguanta esta sesión y punto.
+  }
+}
+
+async function renderAccentPicker(profile) {
+  const disponibles = new Set(prog.availableAccents(profile.unlocked_reward_ids));
+  const activo = currentAccent();
+  const host = $("accent-picker");
+
+  host.innerHTML = Object.entries(prog.ACCENTS)
+    .map(([id, a]) => {
+      const libre = disponibles.has(id);
+      return `<button class="accent-opt" type="button" data-accent-id="${id}"
+                      aria-pressed="${id === activo}" ${libre ? "" : "disabled"}
+                      title="${libre ? a.name : `${a.name} — bloqueado`}">
+                <span class="accent-dot" style="background:${a.color}">${libre ? (id === activo ? "✓" : "") : "🔒"}</span>
+                <span>${a.name}</span>
+              </button>`;
+    })
+    .join("");
+
+  host.querySelectorAll("[data-accent-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      applyAccent(btn.dataset.accentId);
+      renderAccentPicker(profile);
+    });
+  });
+}
+
+// ── Pantalla de Progreso ────────────────────────────────────────────
+
+async function loadProgress() {
+  const profile = await player.reconcile();
+  const nivel = prog.levelForTotalXP(profile.total_xp);
+
+  $("prog-level").textContent = nivel;
+  $("prog-title").textContent = prog.highestTitle(profile.unlocked_reward_ids) ?? prog.titleForLevel(nivel);
+  $("prog-detail").textContent = `${prog.xpRemainingToNextLevel(profile.total_xp)} XP para el nivel ${nivel + 1}`;
+  $("prog-streak").textContent = profile.login_streak;
+  $("prog-record").textContent = profile.longest_login_streak;
+  $("prog-total").textContent = profile.total_xp;
+
+  const ring = $("level-ring");
+  const CIRC = 2 * Math.PI * 52;
+  ring.style.strokeDasharray = String(CIRC);
+  ring.style.strokeDashoffset = String(CIRC * (1 - prog.progressWithinLevel(profile.total_xp)));
+
+  // Semana
+  const semana = await player.dailyXP(7);
+  // El máximo nunca baja de 20 para que un día de 5 XP no salga como
+  // una barra a tope: la semana se lee comparando días, y con un solo
+  // dato pequeño la escala engañaría.
+  const maximo = Math.max(20, ...semana.map((d) => d.xp));
+  // Altura en PÍXELES y no en porcentaje: el hueco de la barra son los
+  // 116px de .xp-week menos las dos etiquetas y sus separaciones, y un
+  // porcentaje dentro de un flex no tiene contra qué resolverse.
+  const ALTO_MAX = 78;
+
+  $("week-total").textContent = `${semana.reduce((s, d) => s + d.xp, 0)} XP`;
+  $("xp-week").innerHTML = semana
+    .map((d, i) => {
+      const alto = Math.max(3, Math.round((d.xp / maximo) * ALTO_MAX));
+      const hoy = i === semana.length - 1;
+      const clases = ["xp-day", d.xp === 0 ? "is-empty" : "", hoy ? "is-today" : ""].join(" ");
+      return `<div class="${clases}">
+                <span class="xp-day-value">${d.xp || ""}</span>
+                <div class="xp-bar" style="height:${alto}px"></div>
+                <span class="xp-day-label">${d.date.toLocaleDateString("es-ES", { weekday: "narrow" })}</span>
+              </div>`;
+    })
+    .join("");
+
+  // Pase
+  $("season-name").textContent = new Date().toLocaleDateString("es-ES", { month: "long" });
+  $("season-xp").textContent = `${profile.season_xp} XP`;
+  const siguiente = prog.nextTier(profile.season_xp);
+  const desbloqueados = new Set(profile.unlocked_reward_ids);
+
+  $("tier-list").innerHTML = prog.SEASON_TIERS.map((t) => {
+    const hecho = desbloqueados.has(t.id) || profile.season_xp >= t.xpRequired;
+    const esSiguiente = siguiente?.id === t.id;
+    const clases = ["tier", hecho ? "is-unlocked" : "", esSiguiente ? "is-next" : ""].join(" ");
+    const estado = hecho
+      ? "✓"
+      : esSiguiente
+        ? `faltan ${t.xpRequired - profile.season_xp}`
+        : "🔒";
+    return `<li class="${clases}">
+              <span class="tier-icon" aria-hidden="true">${t.icon}</span>
+              <span class="tier-body">
+                <span class="tier-name">${esc(prog.tierRewardName(t))}</span>
+                <span class="tier-req">Nivel ${t.tier} del pase · ${t.xpRequired} XP</span>
+              </span>
+              <span class="tier-state">${estado}</span>
+            </li>`;
+  }).join("");
+
+  await renderAccentPicker(profile);
+
+  // Historial
+  const eventos = await player.recentEvents(12);
+  $("xp-log").innerHTML = eventos.length
+    ? eventos
+        .map((e) => {
+          const src = prog.XP_SOURCES[e.source];
+          return `<li class="row">
+                    <span aria-hidden="true">${src?.icon ?? "⭐"}</span>
+                    <div class="row-main">
+                      <div class="row-title">${esc(src?.name ?? e.source)}</div>
+                      <div class="row-sub">${dayOf(e.date)}</div>
+                    </div>
+                    <span class="pill">+${e.amount}</span>
+                  </li>`;
+        })
+        .join("")
+    : `<li class="empty">Todavía no has ganado puntos. Cumple un hábito o completa una tarea.</li>`;
+}
+
 // ── Inicio ──────────────────────────────────────────────────────────
 
 async function loadHome() {
+  await loadHomeProgression();
+
   const entries = await todaysFood();
   const goal = await nutritionGoal();
   const budget = await budgetSettings();
@@ -1015,6 +1346,66 @@ async function loadHome() {
     : "";
 }
 
+/** La tarjeta de nivel y los retos, arriba de Inicio. */
+async function loadHomeProgression() {
+  // Antes de pintar, recalcular el total desde los eventos: así se
+  // recoge el XP ganado en el iPhone en cuanto ha sincronizado, sin
+  // depender de qué perfil ganó la última escritura. Solo escribe si
+  // algo cambió, así que la segunda pasada no hace nada.
+  const profile = await player.reconcile();
+  const nivel = prog.levelForTotalXP(profile.total_xp);
+
+  $("home-level").textContent = nivel;
+  $("home-level-title").textContent =
+    prog.highestTitle(profile.unlocked_reward_ids) ?? prog.titleForLevel(nivel);
+  $("home-level-bar").style.width = `${prog.progressWithinLevel(profile.total_xp) * 100}%`;
+  $("home-level-detail").textContent = `${prog.xpRemainingToNextLevel(profile.total_xp)} XP para el nivel ${nivel + 1}`;
+
+  // La racha solo se enseña si existe: un "🔥 0" es un recordatorio de
+  // que no tienes racha, que es justo lo contrario de lo que hace un
+  // contador de rachas.
+  const rachaVisible = (profile.login_streak ?? 0) > 0;
+  $("home-streak-pill").hidden = !rachaVisible;
+  $("home-streak").textContent = profile.login_streak;
+
+  const retos = player.todaysChallenges(await challengeCounts());
+  const hechos = retos.filter(prog.challengeIsComplete).length;
+
+  $("home-challenge-count").textContent = `${hechos}/${retos.length}`;
+  $("home-challenges").innerHTML = retos
+    .map((c) => {
+      const hecho = prog.challengeIsComplete(c);
+      const contador = c.goal > 1 ? `${Math.min(c.progress, c.goal)}/${c.goal}` : "";
+      return `<li class="challenge ${hecho ? "is-done" : ""}">
+                <span class="challenge-icon" aria-hidden="true">${hecho ? "✅" : prog.challengeIcon(c.kind)}</span>
+                <span class="challenge-name">${esc(prog.challengeTitle(c.kind, c.goal))}</span>
+                <span class="challenge-count">${hecho ? "" : contador}</span>
+              </li>`;
+    })
+    .join("");
+
+  $("home-challenge-foot").textContent =
+    hechos === retos.length
+      ? `¡Los tres hechos! +${prog.CHALLENGE_BONUS_XP} XP de bonificación.`
+      : `Completa los tres y te llevas +${prog.CHALLENGE_BONUS_XP} XP extra.`;
+}
+
+// ── Peso ────────────────────────────────────────────────────────────
+
+$("weight-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const kg = Number($("weight-kg").value);
+  if (!kg || kg <= 0) return;
+
+  const entry = await store.insert("weight_entries", {
+    date: nowISO(),
+    weight_kg: kg,
+  });
+  $("weight-kg").value = "";
+  // Una vez al día: apuntar el peso cinco veces no da cinco premios.
+  await awardXP("weightLogged", prog.dedupeKey("weight", new Date(entry.date)));
+});
+
 // ── Arranque y sesión ───────────────────────────────────────────────
 
 function showAuth() {
@@ -1040,6 +1431,16 @@ async function showApp() {
   $("side-avatar").textContent = email.charAt(0) || "·";
 
   go("home");        // pinta ya, desde lo que haya en local
+
+  // Cuenta el día y actualiza la racha. Es idempotente: abrir la web
+  // diez veces hoy solo cuenta una. Va después de pintar para que no
+  // retrase la primera pantalla.
+  try {
+    await player.registerDailyLogin();
+  } catch (error) {
+    console.warn("racha:", error);
+  }
+
   store.sync();      // y actualiza por detrás
 }
 
@@ -1048,6 +1449,7 @@ syncHabitKindFields();
 setAuthMode("signin");
 renderBackgroundPicker();
 updateThemeColor(currentBackground());
+applyAccent(currentAccent());
 
 supabase.auth.onAuthStateChange((_event, session) => {
   if (session) showApp();

@@ -562,6 +562,90 @@ archivos de la app, así que arranca al instante y sigue funcionando sin
 conexión o con el NAS apagado. Ver `web/README.md` para ponerla en marcha
 y para publicarla en un Synology con Web Station.
 
+## Progresión en la web (nivel, racha, retos y pase)
+
+La web ya no es "la versión reducida": tiene el mismo sistema de niveles
+que el iPhone, con los mismos números y las mismas claves, porque es
+**una sola cuenta**. Quien use solo la web (Android, el iPad del colegio)
+ve exactamente lo mismo.
+
+| Archivo | Gemelo en iOS |
+|---|---|
+| `web/progression.js` | `ProgressionEngine` + `SeasonPass` + `DailyChallenges` |
+| `web/player.js` | `ProgressionRepository` + `DailyChallengeService` |
+| `web/progression.test.mjs` | `HabitiumTests/ProgressionEngineTests` |
+
+Se prueba con `node --test web/progression.test.mjs` (23 pruebas, sin
+instalar nada).
+
+### Los tres puntos donde esto se rompe en silencio
+
+**1. Los retos del día tienen que coincidir con los del iPhone.** Se
+sortean con un generador sembrado con la fecha, así que hay que
+reproducir el sorteo de Swift *exactamente*. El detalle que casi se cuela:
+cuando solo hay una opción posible, Swift **igual consume un número** del
+generador (su bucle es un `repeat…while`). Saltarse esa tirada —que es lo
+natural— desviaría la secuencia a partir de ahí y cada dispositivo
+mostraría retos distintos, sin ningún error visible. Comprobado cruzando
+la versión JS con una transcripción independiente del Swift: **120/120
+días coinciden**, y hay una prueba que fija el resultado de dos fechas
+concretas para que no se mueva.
+
+**2. Las claves anti-repetición llevan los identificadores en
+MAYÚSCULAS.** En Swift, interpolar un UUID da mayúsculas; en JavaScript y
+en Postgres son minúsculas. Si la web escribiera la clave en minúsculas,
+`habit:a1b2…:2026-09-04` y `habit:A1B2…:2026-09-04` serían dos claves
+distintas para el mismo hábito del mismo día: los dos dispositivos
+premiarían por su cuenta y saldría XP duplicado. De ahí `idKey()` en
+`app.js`.
+
+**3. El total se recalcula desde los eventos, no se confía en el
+contador.** `player_profiles` es una fila única con "gana el más
+reciente", y para un contador eso pierde datos: si ganas XP en el móvil y
+la web sube después un perfil suyo, el contador del móvil desaparece. Los
+`xp_events` sí convergen (filas independientes con clave única en
+Postgres), así que `player.reconcile()` vuelve a sumarlos antes de pintar.
+
+### Un fallo real que encontró la prueba en navegador
+
+Al arrancar, la web llama a `showApp()` **dos veces** (una por
+`onAuthStateChange` y otra por `getSession`, que es como funciona
+Supabase). Las dos carreras leían "el login de hoy aún no está premiado"
+y las dos escribían: **20 XP en vez de 10**. Arreglado poniendo las tres
+operaciones que escriben (`award`, `registerDailyLogin`, `reconcile`) en
+una cola de una en una (`enSerie` en `player.js`).
+
+Se encontró ejecutando la web de verdad en Chromium con un doble de
+Supabase en memoria, no leyendo el código. La primera versión del doble
+devolvía tablas vacías al hacer *pull*, lo que borraba los datos locales
+y daba un falso 0 — el doble tuvo que guardar de verdad para que la
+prueba dijera algo.
+
+### Qué más trae
+
+- **Registro de peso en la web** (`Nutrición`). Faltaba, y sin él el reto
+  "Registra tu peso" era imposible para quien solo usa la web.
+- **Color de acento elegible** en `Progreso`, desbloqueable por el pase,
+  igual que en el iPhone. Redefine `--green`, que es el color principal
+  de toda la web.
+- **Movimiento**: entrada escalonada de tarjetas, anillos y barras que se
+  llenan al aparecer, aviso de XP y celebración con confeti. Todo se
+  desactiva entero con "Reducir movimiento".
+
+## Movimiento en iOS (`Core/DesignSystem/Motion.swift`)
+
+Dos reglas: nada dura más de medio segundo (una animación bonita la
+primera vez es un peaje la número cincuenta, y esto se abre a diario), y
+todo se salta si el iPhone tiene "Reducir movimiento" activado.
+
+- `.appearIn(índice)` — entrada escalonada; el retardo se corta a la
+  sexta tarjeta o la última parecería lentitud.
+- `CountingInt` — números que cuentan desde 0. `.contentTransition(.numericText())`
+  no vale aquí: anima el cambio de un número a otro, así que de 0 a 720
+  daría un solo salto.
+- `RingProgress` y `ProgressBar` se llenan al aparecer en vez de salir
+  ya llenos.
+
 ## Fondo elegible (iPhone y web)
 
 El color de fondo lo elige cada persona en **Ajustes → Fondo**. Seis

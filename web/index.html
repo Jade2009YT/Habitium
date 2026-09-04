@@ -114,6 +114,31 @@
 
     <!-- ─────────── Inicio ─────────── -->
     <section id="view-home" class="view">
+      <!-- Nivel y racha, arriba del todo: es lo primero que se mira al
+           abrir, y lo que hace que abrir tenga sentido un martes en que
+           no tienes nada que apuntar. -->
+      <button class="card level-card is-link" data-view="progress" type="button">
+        <span class="level-badge"><strong id="home-level">1</strong><small>NIVEL</small></span>
+        <span class="level-main">
+          <span class="level-title" id="home-level-title">Empezando</span>
+          <span class="track"><span id="home-level-bar" class="track-fill purple"></span></span>
+          <span class="stat-sub" id="home-level-detail">—</span>
+        </span>
+        <span class="streak-pill" id="home-streak-pill" hidden>
+          <span aria-hidden="true">🔥</span><strong id="home-streak">0</strong>
+        </span>
+        <span class="chev" aria-hidden="true">›</span>
+      </button>
+
+      <article class="card">
+        <header class="card-head">
+          <h2><span aria-hidden="true">🎯</span> Retos de hoy</h2>
+          <span class="pill" id="home-challenge-count">0/3</span>
+        </header>
+        <ul class="challenge-list" id="home-challenges"></ul>
+        <p class="muted sm" id="home-challenge-foot"></p>
+      </article>
+
       <div class="grid grid-home">
         <article class="card card-hero is-link" data-view="nutrition" role="button" tabindex="0">
           <div class="ring-wrap">
@@ -190,6 +215,17 @@
           </div>
         </details>
       </form>
+      <!-- Peso: en el iPhone está en la tarjeta de tendencia. Aquí hace
+           falta igualmente, o quien use solo la web (Android, el iPad
+           del colegio) tendría el reto "Registra tu peso" imposible. -->
+      <form id="weight-form" class="composer composer-slim">
+        <div class="composer-row">
+          <input id="weight-kg" type="number" placeholder="Peso de hoy (kg)" min="20" max="400" step="0.1">
+          <button class="btn btn-ghost" type="submit">Guardar peso</button>
+          <span class="pill" id="weight-last"></span>
+        </div>
+      </form>
+
       <h2 class="section-title">Hoy <span id="food-total" class="pill"></span></h2>
       <ul id="food-list" class="list"></ul>
     </section>
@@ -292,6 +328,62 @@
       <ul id="med-list" class="list is-dim"></ul>
     </section>
 
+    <!-- ─────────── Progreso ─────────── -->
+    <section id="view-progress" class="view" hidden>
+      <article class="card progress-hero">
+        <div class="level-ring-wrap">
+          <svg class="ring ring-lg" viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="ring-track" cx="60" cy="60" r="52"></circle>
+            <circle id="level-ring" class="ring-progress purple" cx="60" cy="60" r="52"></circle>
+          </svg>
+          <div class="ring-center">
+            <strong id="prog-level">1</strong>
+            <span>nivel</span>
+          </div>
+        </div>
+        <div class="progress-hero-side">
+          <h2 id="prog-title">Empezando</h2>
+          <p class="hero-detail" id="prog-detail">—</p>
+          <div class="chips">
+            <span class="chip chip-streak"><span aria-hidden="true">🔥</span> <b id="prog-streak">0</b> días seguidos</span>
+            <span class="chip"><span aria-hidden="true">🏅</span> récord <b id="prog-record">0</b></span>
+            <span class="chip"><span aria-hidden="true">⭐</span> <b id="prog-total">0</b> XP</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <header class="card-head">
+          <h2>Esta semana</h2>
+          <span class="pill" id="week-total">0 XP</span>
+        </header>
+        <!-- Barras de los últimos 7 días. Sin biblioteca de gráficos:
+             siete divs con una altura son más fiables y pesan cero. -->
+        <div class="xp-week" id="xp-week"></div>
+      </article>
+
+      <article class="card">
+        <header class="card-head">
+          <h2>Pase de <span id="season-name">temporada</span></h2>
+          <span class="pill" id="season-xp">0 XP</span>
+        </header>
+        <p class="muted sm">La experiencia del pase vuelve a cero cada mes,
+           pero lo desbloqueado se queda para siempre.</p>
+        <ol class="tier-list" id="tier-list"></ol>
+      </article>
+
+      <article class="card">
+        <h2>Color de acento</h2>
+        <p class="muted sm">Los que aún no tienes se desbloquean subiendo en el pase.</p>
+        <div class="accent-picker" id="accent-picker" role="group" aria-label="Color de acento"></div>
+      </article>
+
+      <article class="card">
+        <h2>Últimos puntos</h2>
+        <ul class="list" id="xp-log"></ul>
+      </article>
+    </section>
+
     <!-- ─────────── Ajustes ─────────── -->
     <section id="view-settings" class="view" hidden>
       <div class="card form-card">
@@ -340,6 +432,23 @@
   </main>
 
   <nav class="tabbar" id="tabbar" role="tablist"></nav>
+</div>
+
+<!-- Aviso de XP: baja, se lee y se va. role="status" para que un lector
+     de pantalla lo anuncie sin robar el foco de lo que estabas haciendo. -->
+<div id="xp-toast" class="xp-toast" role="status" aria-live="polite" hidden></div>
+
+<!-- Celebración de subida de nivel. Sale ENCIMA de donde estabas, no
+     sustituye a la pantalla: lo que acabas de hacer sigue ahí detrás. -->
+<div id="levelup" class="levelup" hidden>
+  <div class="levelup-confetti" id="levelup-confetti" aria-hidden="true"></div>
+  <div class="levelup-panel" role="alertdialog" aria-labelledby="levelup-title">
+    <div class="levelup-badge"><strong id="levelup-level">2</strong><small>NIVEL</small></div>
+    <p class="levelup-h" id="levelup-title">¡Has subido de nivel!</p>
+    <p class="levelup-sub" id="levelup-name">Empezando</p>
+    <ul class="levelup-rewards" id="levelup-rewards"></ul>
+    <button class="btn btn-primary" id="levelup-close" type="button">Seguir</button>
+  </div>
 </div>
 
 <div id="config-error" class="auth" hidden>

@@ -68,6 +68,12 @@ struct RingProgress: View {
     var lineWidth: CGFloat = 12
     var size: CGFloat = 128
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Lo que se dibuja ahora mismo. Empieza en 0 y sube hasta `clamped`
+    /// al aparecer: un anillo que ya está lleno cuando abres la pantalla
+    /// no dice nada, uno que se llena delante de ti sí.
+    @State private var shown: Double = 0
+
     private var clamped: Double { min(max(progress, 0), 1) }
     private var isOver: Bool { progress > 1.0 }
 
@@ -76,15 +82,24 @@ struct RingProgress: View {
             Circle()
                 .stroke(Color(.tertiarySystemFill), lineWidth: lineWidth)
             Circle()
-                .trim(from: 0, to: clamped)
+                .trim(from: 0, to: shown)
                 .stroke(
                     isOver ? Theme.Colors.danger : color,
                     style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))
-                .animation(.easeOut(duration: 0.5), value: clamped)
         }
         .frame(width: size, height: size)
+        .onAppear { fill(to: clamped, duration: 0.85) }
+        .onChange(of: clamped) { _, new in fill(to: new, duration: 0.5) }
+    }
+
+    private func fill(to target: Double, duration: Double) {
+        guard !reduceMotion else {
+            shown = target
+            return
+        }
+        withAnimation(.easeOut(duration: duration)) { shown = target }
     }
 }
 
@@ -97,17 +112,31 @@ struct ProgressBar: View {
     let color: Color
     var height: CGFloat = 7
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shown: Double = 0
+
+    private var clamped: Double { min(max(value, 0), 1) }
+
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
                 Capsule().fill(Color(.tertiarySystemFill))
                 Capsule()
                     .fill(value > 1.0 ? Theme.Colors.danger : color)
-                    .frame(width: geometry.size.width * min(max(value, 0), 1))
-                    .animation(.easeOut(duration: 0.35), value: value)
+                    .frame(width: geometry.size.width * shown)
             }
         }
         .frame(height: height)
+        .onAppear { fill(to: clamped, duration: 0.6) }
+        .onChange(of: clamped) { _, new in fill(to: new, duration: 0.35) }
+    }
+
+    private func fill(to target: Double, duration: Double) {
+        guard !reduceMotion else {
+            shown = target
+            return
+        }
+        withAnimation(.easeOut(duration: duration)) { shown = target }
     }
 }
 
