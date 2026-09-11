@@ -2,8 +2,9 @@
 //  PlannerView.swift
 //  Habitium
 //
-//  Calendario y Recordatorios tab: monthly calendar + selected day's
-//  tasks/events/note, backed by local notifications for reminders.
+//  Calendario: alta rápida escribiendo, el mes, y el detalle del día
+//  seleccionado. Las tres piezas entran escalonadas como en el resto de
+//  la app.
 //
 
 import SwiftUI
@@ -14,24 +15,28 @@ struct PlannerView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
+            ScrollView {
                 if let viewModel {
-                    ScrollView {
-                        VStack(spacing: Theme.Layout.sectionSpacing) {
-                            QuickAddBar { text in
-                                viewModel.addQuickEvent(from: text)
-                            }
-                            MonthCalendarView(
-                                visibleMonth: Bindable(viewModel).visibleMonth,
-                                selectedDate: Bindable(viewModel).selectedDate,
-                                daysWithItems: viewModel.daysWithItems
-                            )
-                            DayDetailView(viewModel: viewModel)
+                    VStack(spacing: Theme.Layout.sectionSpacing) {
+                        QuickAddBar { text in
+                            viewModel.addQuickEvent(from: text)
                         }
-                        .padding()
+                        .appearIn(0)
+
+                        MonthCalendarView(
+                            visibleMonth: Bindable(viewModel).visibleMonth,
+                            selectedDate: Bindable(viewModel).selectedDate,
+                            daysWithItems: viewModel.daysWithItems
+                        )
+                        .appearIn(1)
+
+                        DayDetailView(viewModel: viewModel)
+                            .appearIn(2)
                     }
+                    .padding(.horizontal)
+                    .padding(.bottom, 24)
                 } else {
-                    ProgressView()
+                    ProgressView().padding(.top, 60)
                 }
             }
             .themedBackground()

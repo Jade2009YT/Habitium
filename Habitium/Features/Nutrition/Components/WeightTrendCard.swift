@@ -21,17 +21,15 @@ struct WeightTrendCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label("Peso corporal", systemImage: "figure.stand")
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
-                Spacer()
+            CardHeader(title: "Peso corporal", symbol: "figure.stand", color: Theme.Colors.nutrition) {
                 Button {
                     showingLogSheet = true
                 } label: {
                     Label("Registrar", systemImage: "plus.circle.fill")
-                        .font(.caption.bold())
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.Colors.nutrition)
                 }
+                .buttonStyle(.plain)
             }
 
             if let latest = entries.first {

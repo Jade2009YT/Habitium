@@ -39,15 +39,43 @@ struct MonthCalendarView: View {
         .cardStyle()
     }
 
+    /// Las flechas van en pastilla y no como iconos sueltos: un chevron
+    /// suelto en medio de una tarjeta no parece pulsable, y cambiar de
+    /// mes es la única acción de este control.
     private var header: some View {
-        HStack {
-            Button { shiftMonth(by: -1) } label: { Image(systemName: "chevron.left") }
-            Spacer()
-            Text(visibleMonth.formatted(.dateTime.month(.wide).year()))
-                .font(.headline)
-            Spacer()
-            Button { shiftMonth(by: 1) } label: { Image(systemName: "chevron.right") }
+        HStack(spacing: 10) {
+            monthButton(symbol: "chevron.left", delta: -1)
+
+            Spacer(minLength: 0)
+
+            VStack(spacing: 0) {
+                Text(visibleMonth.formatted(.dateTime.month(.wide)))
+                    .font(.headline)
+                Text(visibleMonth.formatted(.dateTime.year()))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 0)
+
+            monthButton(symbol: "chevron.right", delta: 1)
         }
+    }
+
+    private func monthButton(symbol: String, delta: Int) -> some View {
+        Button {
+            shiftMonth(by: delta)
+        } label: {
+            Image(systemName: symbol)
+                .font(.footnote.weight(.bold))
+                .foregroundStyle(Theme.Colors.planner)
+                .frame(width: 30, height: 30)
+                .background(
+                    Theme.Colors.planner.opacity(0.15),
+                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     private func dayCell(_ date: Date) -> some View {
@@ -58,16 +86,23 @@ struct MonthCalendarView: View {
         return Button {
             selectedDate = date
         } label: {
-            VStack(spacing: 2) {
+            VStack(spacing: 3) {
                 Text("\(calendar.component(.day, from: date))")
-                    .font(.subheadline)
+                    .font(.subheadline.weight(isSelected || isToday ? .semibold : .regular))
                     .frame(width: 32, height: 32)
-                    .background(isSelected ? Theme.Colors.planner : .clear)
+                    .background {
+                        if isSelected {
+                            Circle().fill(Theme.Colors.planner)
+                        } else if isToday {
+                            // Hoy sin seleccionar: aro, no relleno. Con dos
+                            // círculos llenos no se sabría cuál está elegido.
+                            Circle().strokeBorder(Theme.Colors.planner, lineWidth: 1.5)
+                        }
+                    }
                     .foregroundStyle(isSelected ? .white : (isToday ? Theme.Colors.planner : .primary))
-                    .clipShape(Circle())
 
                 Circle()
-                    .fill(hasItems ? Theme.Colors.planner : .clear)
+                    .fill(hasItems ? (isSelected ? Theme.Colors.planner : Theme.Colors.planner.opacity(0.55)) : .clear)
                     .frame(width: 4, height: 4)
             }
         }
@@ -75,9 +110,8 @@ struct MonthCalendarView: View {
     }
 
     private func shiftMonth(by value: Int) {
-        if let newMonth = calendar.date(byAdding: .month, value: value, to: visibleMonth) {
-            visibleMonth = newMonth
-        }
+        guard let newMonth = calendar.date(byAdding: .month, value: value, to: visibleMonth) else { return }
+        withAnimation(Motion.entrance) { visibleMonth = newMonth }
     }
 
     private var weekdaySymbols: [String] {

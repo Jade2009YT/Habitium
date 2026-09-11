@@ -562,6 +562,50 @@ archivos de la app, así que arranca al instante y sigue funcionando sin
 conexión o con el NAS apagado. Ver `web/README.md` para ponerla en marcha
 y para publicarla en un Synology con Web Station.
 
+## Rediseño de Nutrición, Agenda y Finanzas
+
+Las tres pantallas que quedaron fuera del rediseño anterior. Ahora usan el
+mismo lenguaje que Inicio, Hábitos, Medicación y Progreso: tarjetas con
+`CardHeader` + `IconBadge`, `ProgressBar`/`RingProgress` en vez de los
+`ProgressView` del sistema, `EmptyHint` en los vacíos y entrada
+escalonada con `.appearIn(n)`.
+
+### Fuera `List`, dentro `ScrollView` + tarjetas
+
+Nutrición y Finanzas iban en un `List` con cada tarjeta metida en una
+fila y disimulada con `listRowInsets(EdgeInsets())` +
+`listRowBackground(.clear)`. Eso es pelear contra el control en vez de
+usarlo, y encima obligaba a `scrollContentBackground(.hidden)` para que
+el fondo elegido se viera.
+
+**Lo que cuesta:** las `swipeActions` solo existen dentro de `List`. Así
+que eliminar pasa a ser **mantener pulsado** (`contextMenu`), que es lo
+que ya hacían Hábitos y Medicación — antes la app tenía dos formas
+distintas de borrar según la pantalla. Cada lista lo dice en letra
+pequeña, porque un gesto que no se anuncia no existe.
+
+### Decisiones concretas
+
+- **Nutrición** — el anillo pasa a ser el protagonista, con las kcal que
+  quedan contando desde 0 (`CountingInt`) y los tres macros en barras a
+  su lado. La racha de registro sale de una línea suelta a su propia
+  tarjeta: es lo que sostiene el hábito de apuntar, que es la parte que
+  todo el mundo abandona la segunda semana.
+- **Finanzas** — manda **lo que te queda**, no lo gastado: es la cifra
+  con la que decides si te puedes permitir algo ahora. Los ingresos van
+  en verde y los gastos en el color normal del texto — pintar cada gasto
+  de rojo haría que un mes normal pareciera una alarma. Y "Editar
+  presupuesto" y "Gastos fijos" salen del menú `…` de la barra, donde no
+  los encontraba nadie, a una tarjeta al final de la pantalla.
+- **Agenda** — la papelera de cada tarea desaparece: tres botones por
+  fila (marcar, destacar, borrar) convertían la fila en un panel de
+  control, y el de borrar estaba pegado al de destacar. La estrella solo
+  se pinta cuando la tarea es foco del día, para que se sepa qué
+  significa. En el calendario, "hoy" es un aro y el día elegido es un
+  círculo lleno: con dos rellenos no se distinguía cuál estaba elegido.
+- **Meta de ahorro** — dice lo que falta ("Te faltan 260 €") además del
+  porcentaje. Un 52 % no es una cifra con la que puedas hacer nada.
+
 ## Progresión en la web (nivel, racha, retos y pase)
 
 La web ya no es "la versión reducida": tiene el mismo sistema de niveles

@@ -16,15 +16,18 @@ struct AdaptiveGoalCard: View {
     private var isIncrease: Bool { suggestion.difference > 0 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Habitium sugiere ajustar tu meta", systemImage: "wand.and.stars")
-                .font(.caption.bold())
-                .foregroundStyle(Theme.Colors.nutrition)
+        VStack(alignment: .leading, spacing: 12) {
+            CardHeader(title: "Sugerencia", symbol: "wand.and.stars", color: Theme.Colors.nutrition)
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("\(Int(suggestion.currentCalories))").strikethrough().foregroundStyle(.secondary)
-                Image(systemName: "arrow.right").font(.caption).foregroundStyle(.secondary)
-                Text("\(Int(suggestion.suggestedCalories)) kcal").font(.title3.bold())
+                Text("\(Int(suggestion.currentCalories))")
+                    .strikethrough()
+                    .foregroundStyle(.secondary)
+                Image(systemName: "arrow.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                Text("\(Int(suggestion.suggestedCalories)) kcal")
+                    .font(Theme.Fonts.metricSmall)
             }
 
             Text("Según tu tendencia real de las últimas \(suggestion.windowDays) días (mantenimiento estimado ≈ \(Int(suggestion.estimatedMaintenanceCalories)) kcal, \(rateDescription)).")
@@ -38,6 +41,7 @@ struct AdaptiveGoalCard: View {
             .buttonStyle(.borderedProminent)
             .tint(Theme.Colors.nutrition)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .cardStyle()
     }
 
