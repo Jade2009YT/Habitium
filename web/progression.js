@@ -102,6 +102,13 @@ export const XP_SOURCES = {
   weightLogged: { xp: 5, name: "Peso registrado", icon: "⚖️" },
   streakMilestone: { xp: 50, name: "Hito de racha", icon: "🔥" },
   dailyChallenge: { xp: 60, name: "Retos del día completados", icon: "🎯" },
+  // Estudios. "Saca buenas notas y subes de nivel" era la idea original
+  // del sistema y es la que faltaba. Apuntar una nota da poco; sacar
+  // buena nota da bastante, y no al revés: si apuntar diera lo mismo,
+  // lo rentable sería inventarse pruebas en vez de estudiar.
+  gradeLogged: { xp: 10, name: "Nota apuntada", icon: "📝" },
+  goodGrade: { xp: 35, name: "Buena nota", icon: "🎓" },
+  subjectPassing: { xp: 25, name: "Asignatura aprobada", icon: "📗" },
 };
 
 export const xpFor = (source) => XP_SOURCES[source]?.xp ?? 0;

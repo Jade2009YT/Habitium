@@ -107,7 +107,16 @@
         <p class="topbar-date" id="topbar-date"></p>
         <h1 class="topbar-title" id="topbar-title">Inicio</h1>
       </div>
-      <button id="refresh" class="btn btn-ghost btn-sm" type="button" title="Actualizar">↻</button>
+      <div class="topbar-actions">
+        <!-- Nivel y racha, siempre visibles y pulsables. Llevan a
+             Progreso, que en móvil no cabe en la barra de pestañas. -->
+        <button class="topbar-chip" id="topbar-chip" data-view="progress" type="button"
+                title="Tu progreso">
+          <span class="chip-level" id="chip-level">1</span>
+          <span class="chip-streak" id="chip-streak"><span aria-hidden="true">🔥</span><b id="chip-streak-n">0</b></span>
+        </button>
+        <button id="refresh" class="btn btn-ghost btn-sm" type="button" title="Actualizar">↻</button>
+      </div>
     </header>
 
     <div id="sync-banner" class="banner" hidden role="status"></div>
@@ -132,7 +141,7 @@
 
       <article class="card">
         <header class="card-head">
-          <h2><span aria-hidden="true">🎯</span> Retos de hoy</h2>
+          <span class="card-head-inner"><span class="badge orange" aria-hidden="true">🎯</span><h2>Retos de hoy</h2></span>
           <span class="pill" id="home-challenge-count">0/3</span>
         </header>
         <ul class="challenge-list" id="home-challenges"></ul>
@@ -152,34 +161,40 @@
             </div>
           </div>
           <div class="hero-side">
-            <h2>Nutrición de hoy</h2>
+            <header class="card-head"><span class="badge" aria-hidden="true">🍎</span><h2>Nutrición de hoy</h2></header>
             <p class="hero-detail" id="home-calories-detail">—</p>
             <div class="macros" id="home-macros"></div>
           </div>
         </article>
 
+        <article class="card accent-blue is-link" data-view="study" role="button" tabindex="0">
+          <header class="card-head"><span class="badge blue" aria-hidden="true">🎓</span><h2>Estudios</h2></header>
+          <p class="stat" id="home-study">—</p>
+          <p class="stat-sub" id="home-study-detail"></p>
+        </article>
+
         <article class="card accent-purple is-link" data-view="habits" role="button" tabindex="0">
-          <h2>Hábitos de hoy</h2>
+          <header class="card-head"><span class="badge purple" aria-hidden="true">🔁</span><h2>Hábitos de hoy</h2></header>
           <p class="stat" id="home-habits">—</p>
           <p class="stat-sub" id="home-habits-detail"></p>
           <div class="track"><div id="home-habits-bar" class="track-fill purple"></div></div>
         </article>
 
         <article class="card accent-orange is-link" data-view="finance" role="button" tabindex="0">
-          <h2>Disponible este mes</h2>
+          <header class="card-head"><span class="badge orange" aria-hidden="true">💶</span><h2>Disponible este mes</h2></header>
           <p class="stat" id="home-available">—</p>
           <p class="stat-sub" id="home-available-detail"></p>
           <div class="track"><div id="home-budget-bar" class="track-fill orange"></div></div>
         </article>
 
         <article class="card accent-blue is-link" data-view="planner" role="button" tabindex="0">
-          <h2>Próxima tarea</h2>
+          <header class="card-head"><span class="badge blue" aria-hidden="true">📅</span><h2>Próxima tarea</h2></header>
           <p class="stat-text" id="home-next">—</p>
           <p class="stat-sub" id="home-next-detail"></p>
         </article>
 
         <article class="card accent-pink is-link" data-view="medication" role="button" tabindex="0">
-          <h2>Próxima toma</h2>
+          <header class="card-head"><span class="badge pink" aria-hidden="true">💊</span><h2>Próxima toma</h2></header>
           <p class="stat-text" id="home-dose">—</p>
           <p class="stat-sub" id="home-dose-detail"></p>
         </article>
@@ -354,7 +369,7 @@
 
       <article class="card">
         <header class="card-head">
-          <h2>Esta semana</h2>
+          <span class="card-head-inner"><span class="badge purple" aria-hidden="true">📈</span><h2>Esta semana</h2></span>
           <span class="pill" id="week-total">0 XP</span>
         </header>
         <!-- Barras de los últimos 7 días. Sin biblioteca de gráficos:
@@ -364,7 +379,7 @@
 
       <article class="card">
         <header class="card-head">
-          <h2>Pase de <span id="season-name">temporada</span></h2>
+          <span class="card-head-inner"><span class="badge purple" aria-hidden="true">🏆</span><h2>Pase de <span id="season-name">temporada</span></h2></span>
           <span class="pill" id="season-xp">0 XP</span>
         </header>
         <p class="muted sm">La experiencia del pase vuelve a cero cada mes,
@@ -373,28 +388,122 @@
       </article>
 
       <article class="card">
-        <h2>Color de acento</h2>
-        <p class="muted sm">Los que aún no tienes se desbloquean subiendo en el pase.</p>
-        <div class="accent-picker" id="accent-picker" role="group" aria-label="Color de acento"></div>
+        <header class="card-head"><span class="badge" aria-hidden="true">⭐</span><h2>Últimos puntos</h2></header>
+        <ul class="list" id="xp-log"></ul>
+      </article>
+    </section>
+
+    <!-- ─────────── Estudios ─────────── -->
+    <section id="view-study" class="view" hidden>
+      <!-- Lo que viene primero: si tienes un examen en tres días, eso es
+           lo único que importa al abrir esta pantalla. -->
+      <article class="card">
+        <header class="card-head">
+          <span class="card-head-inner"><span class="badge blue" aria-hidden="true">🎯</span><h2>Lo que viene</h2></span>
+          <button class="btn btn-ghost btn-sm" id="study-add-event" type="button">+ Evento</button>
+        </header>
+        <ul class="list" id="study-events"></ul>
       </article>
 
       <article class="card">
-        <h2>Últimos puntos</h2>
-        <ul class="list" id="xp-log"></ul>
+        <header class="card-head">
+          <span class="card-head-inner"><span class="badge purple" aria-hidden="true">🧮</span><h2>Nota media del curso</h2></span>
+          <span class="pill" id="study-overall">—</span>
+        </header>
+        <div class="subject-grid" id="subject-grid"></div>
+      </article>
+
+      <form id="subject-form" class="composer">
+        <div class="composer-row">
+          <input id="subject-name" type="text" placeholder="Nueva asignatura" required>
+          <input id="subject-icon" class="w-xs" type="text" placeholder="📘" maxlength="2">
+          <input id="subject-classes" class="w-sm" type="number" min="0" step="1" placeholder="Nº clases">
+          <input id="subject-max" class="w-sm" type="number" min="0" step="1" placeholder="Máx. faltas">
+          <button class="btn btn-primary" type="submit">Añadir</button>
+        </div>
+      </form>
+
+      <article class="card" id="grades-card">
+        <header class="card-head">
+          <span class="card-head-inner"><span class="badge" aria-hidden="true">📝</span><h2>Calculadora de notas</h2></span>
+          <span class="pill" id="grades-subject-name">—</span>
+        </header>
+
+        <div class="table-wrap">
+          <table class="tbl" id="grades-table">
+            <thead>
+              <tr>
+                <th>Prueba evaluada</th>
+                <th class="num">Nota</th>
+                <th class="num">Peso</th>
+                <th class="num">Ponderada</th>
+                <th class="mid">Cuenta</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="grades-body"></tbody>
+          </table>
+        </div>
+
+        <form id="grade-form" class="composer-row tight">
+          <input id="grade-name" type="text" placeholder="Examen parcial" required>
+          <input id="grade-score" class="w-xs" type="number" min="0" max="10" step="0.01" placeholder="Nota" required>
+          <input id="grade-weight" class="w-xs" type="number" min="0" max="100" step="1" placeholder="%" required>
+          <button class="btn btn-primary" type="submit">Añadir nota</button>
+        </form>
+
+        <p class="muted sm" id="grade-summary"></p>
+      </article>
+
+      <article class="card">
+        <header class="card-head">
+          <span class="card-head-inner"><span class="badge orange" aria-hidden="true">📍</span><h2>Seguimiento de asistencia</h2></span>
+        </header>
+        <ul class="list" id="attendance-list"></ul>
       </article>
     </section>
 
     <!-- ─────────── Ajustes ─────────── -->
     <section id="view-settings" class="view" hidden>
       <div class="card form-card">
-        <h2>Fondo</h2>
+        <header class="card-head"><span class="badge" aria-hidden="true">🤖</span><h2>Tu clave de IA</h2></header>
+        <p class="muted sm">Para que la app reconozca una comida a partir de una foto hace falta una clave
+           tuya de OpenAI o de Anthropic. Se guarda <b>solo en este navegador</b> y nunca sube a la nube.</p>
+        <div class="form-grid">
+          <label class="field"><span>Servicio</span>
+            <select id="ai-provider">
+              <option value="openai">OpenAI (GPT)</option>
+              <option value="anthropic">Anthropic (Claude)</option>
+            </select>
+          </label>
+          <label class="field"><span>Clave</span>
+            <input id="ai-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…">
+          </label>
+        </div>
+        <div class="composer-row">
+          <button class="btn btn-primary" id="ai-save" type="button">Guardar clave</button>
+          <button class="btn btn-ghost" id="ai-clear" type="button">Quitar</button>
+          <a class="btn btn-ghost" id="ai-help" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">¿De dónde la saco?</a>
+        </div>
+        <p class="muted sm" id="ai-status"></p>
+      </div>
+
+      <div class="card form-card">
+        <header class="card-head"><span class="badge purple" aria-hidden="true">🎨</span><h2>Color de la app</h2></header>
+        <p class="muted sm">El color que manda en botones, barras y pestañas. Elige uno de la lista
+           o pon el tuyo con el cuentagotas — cualquiera vale.</p>
+        <div class="accent-picker" id="accent-picker" role="group" aria-label="Color de acento"></div>
+      </div>
+
+      <div class="card form-card">
+        <header class="card-head"><span class="badge purple" aria-hidden="true">🌗</span><h2>Fondo</h2></header>
         <p class="muted">Los mismos seis que en la app del iPhone. Cambia al momento
            y se queda guardado en este navegador.</p>
         <div class="bg-picker" id="bg-picker" role="group" aria-label="Color de fondo"></div>
       </div>
 
       <form id="goal-form" class="card form-card">
-        <h2>Objetivo diario de nutrición</h2>
+        <header class="card-head"><span class="badge" aria-hidden="true">🎯</span><h2>Objetivo diario de nutrición</h2></header>
         <div class="form-grid">
           <label class="field"><span>Calorías (kcal)</span><input id="goal-calories" type="number" min="0" step="10"></label>
           <label class="field"><span>Proteína (g)</span><input id="goal-protein" type="number" min="0" step="1"></label>
@@ -405,7 +514,7 @@
       </form>
 
       <form id="budget-form" class="card form-card">
-        <h2>Presupuesto</h2>
+        <header class="card-head"><span class="badge orange" aria-hidden="true">💶</span><h2>Presupuesto</h2></header>
         <div class="form-grid">
           <label class="field"><span>Presupuesto mensual</span><input id="budget-monthly" type="number" min="0" step="10"></label>
           <label class="field"><span>Ahorro total</span><input id="budget-savings" type="number" min="0" step="10"></label>
@@ -424,7 +533,7 @@
       </form>
 
       <div class="card form-card">
-        <h2>Cuenta</h2>
+        <header class="card-head"><span class="badge blue" aria-hidden="true">👤</span><h2>Cuenta</h2></header>
         <p class="muted" id="settings-email"></p>
         <button id="sign-out-2" class="btn btn-ghost" type="button">Cerrar sesión</button>
       </div>

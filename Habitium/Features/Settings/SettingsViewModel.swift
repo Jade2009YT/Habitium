@@ -27,6 +27,7 @@ final class SettingsViewModel {
     var preferredAIProvider: AIProviderKind
     var mealReminderNotificationsEnabled: Bool
     var eventNotificationsEnabled: Bool
+    var appleWatchEnabled: Bool
     var mealReminderHour: Int
     var mealReminderMinute: Int
 
@@ -50,6 +51,7 @@ final class SettingsViewModel {
         preferredAIProvider = AIProviderKind(rawValue: settings.preferredAIProvider) ?? .openAI
         mealReminderNotificationsEnabled = settings.mealReminderNotificationsEnabled
         eventNotificationsEnabled = settings.eventNotificationsEnabled
+        appleWatchEnabled = settings.appleWatchEnabled
         mealReminderHour = 19
         mealReminderMinute = 0
 
@@ -74,7 +76,8 @@ final class SettingsViewModel {
         container.updateUserSettings(
             aiProvider: preferredAIProvider,
             mealReminders: mealReminderNotificationsEnabled,
-            eventNotifications: eventNotificationsEnabled
+            eventNotifications: eventNotificationsEnabled,
+            appleWatch: appleWatchEnabled
         )
 
         if mealReminderNotificationsEnabled {

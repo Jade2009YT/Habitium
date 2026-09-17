@@ -293,8 +293,67 @@ create table if not exists public.user_settings (
   preferred_ai_provider text not null default 'openAI',
   meal_reminder_notifications_enabled boolean not null default true,
   event_notifications_enabled boolean not null default true,
+  apple_watch_enabled boolean not null default false,
   display_name text,
   email text,
+  updated_at timestamptz not null default now()
+);
+
+
+-- =========================================================================
+-- Estudios: asignaturas, notas y eventos del curso
+-- =========================================================================
+--
+-- El módulo que faltaba desde el principio: "cada día que inicies sesión,
+-- luego que saques buenas notas, etc., vas a subir de nivel". Sin esto,
+-- la parte de "buenas notas" del sistema de progresión no existía.
+--
+-- La media se calcula SIEMPRE a partir de las notas, nunca se guarda:
+-- un campo `average` en la asignatura sería una segunda fuente de verdad
+-- que se quedaría vieja en cuanto se edite o borre una nota.
+
+create table if not exists public.subjects (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  name text not null,
+  icon text not null default '📘',
+  color text not null default '#2563eb',
+  teacher text,
+  -- Asistencia, con los mismos tres números que se llevan a mano en una
+  -- hoja: cuántas clases tiene la asignatura, cuántas has faltado, y
+  -- cuántas te puedes permitir antes de que cuente.
+  total_classes integer not null default 0,
+  hours_missed integer not null default 0,
+  max_absences integer not null default 0,
+  sort_order integer not null default 0,
+  updated_at timestamptz not null default now()
+);
+
+-- Una prueba evaluada: su nota, cuánto pesa, y si cuenta para la media.
+-- `counts_for_average` existe porque en la vida real hay notas que aún no
+-- cuentan (un parcial que se recupera, un trabajo sin corregir) y que
+-- estropearían la media si entraran a la fuerza.
+create table if not exists public.grades (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  subject_id uuid not null references public.subjects(id) on delete cascade,
+  name text not null,
+  score numeric not null default 0,
+  weight numeric not null default 0,
+  counts_for_average boolean not null default true,
+  date timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Exámenes, entregas, presentaciones… lo que hay por delante en el curso.
+create table if not exists public.study_events (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  subject_id uuid references public.subjects(id) on delete cascade,
+  title text not null,
+  kind text not null default 'exam',
+  date timestamptz not null,
+  notes text,
   updated_at timestamptz not null default now()
 );
 
@@ -314,6 +373,7 @@ begin
     'habits', 'habit_logs',
     'workout_sets',
     'player_profiles', 'xp_events',
+    'subjects', 'grades', 'study_events',
     'user_settings'
   ]
   loop
@@ -337,3 +397,5 @@ create index if not exists habit_logs_user_date_idx on public.habit_logs (user_i
 create index if not exists medication_dose_logs_user_date_idx on public.medication_dose_logs (user_id, date);
 create index if not exists weight_entries_user_date_idx on public.weight_entries (user_id, date);
 create index if not exists xp_events_user_date_idx on public.xp_events (user_id, date);
+create index if not exists grades_user_subject_idx on public.grades (user_id, subject_id);
+create index if not exists study_events_user_date_idx on public.study_events (user_id, date);

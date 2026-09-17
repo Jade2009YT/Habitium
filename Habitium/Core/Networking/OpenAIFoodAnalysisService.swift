@@ -17,7 +17,7 @@ final class OpenAIFoodAnalysisService: FoodVisionAnalyzing {
     private let endpoint = URL(string: "https://api.openai.com/v1/chat/completions")!
     private let model = "gpt-4o"
 
-    init(apiKey: String? = AppConfiguration.openAIAPIKey, session: URLSession = .shared) {
+    init(apiKey: String? = AIKeyStore.key(for: .openAI), session: URLSession = .shared) {
         self.apiKey = apiKey
         self.session = session
     }

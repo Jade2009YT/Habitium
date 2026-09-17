@@ -562,6 +562,86 @@ archivos de la app, así que arranca al instante y sigue funcionando sin
 conexión o con el NAS apagado. Ver `web/README.md` para ponerla en marcha
 y para publicarla en un Synology con Web Station.
 
+## Estudios — asignaturas, notas y asistencia
+
+El módulo que cierra la idea original del sistema de niveles: *"cada día
+que inicies sesión, luego que saques buenas notas, etc., vas a subir de
+nivel"*. La parte de las notas no existía hasta ahora.
+
+Tres tablas nuevas (`subjects`, `grades`, `study_events`) y un motor
+probado aparte en `web/study.js` (13 pruebas en `web/study.test.mjs`).
+
+**La cuenta que casi todo el mundo hace mal.** La media ponderada se
+divide entre el peso REALMENTE evaluado, no entre 100. A mitad de curso
+con un 7 y un 8 que pesan 20 % cada uno, dividir entre 100 da un 3 —
+"estás suspendiendo" — cuando en realidad llevas un 7,5 de lo corregido.
+Es el error clásico de la hoja de cálculo y hay una prueba dedicada a
+que no vuelva.
+
+Otras dos decisiones:
+
+- **`counts_for_average`** existe porque hay notas que aún no cuentan (un
+  parcial a recuperar, un trabajo sin corregir). Meterlas a la fuerza
+  daría un número falso; esconderlas te las haría olvidar.
+- **La asistencia manda sobre la media.** Si te has pasado de faltas, la
+  asignatura se marca en rojo aunque lleves un 9: la nota no te salva de
+  perder la convocatoria.
+
+XP: apuntar una nota da 10, sacar un 7 o más da 35, y dejar una
+asignatura aprobada da 25 (una vez por asignatura y temporada). Apuntar
+da poco a propósito — si diera lo mismo, lo rentable sería inventarse
+pruebas en vez de estudiar.
+
+## Tu propia clave de IA
+
+Hasta ahora la clave solo podía venir de `Configuration/Secrets.xcconfig`,
+o sea de quien compila la app. Cualquier otra persona que se la instalara
+se quedaba sin análisis de comidas y sin forma de arreglarlo desde
+dentro.
+
+- **iPhone** — `Ajustes → Análisis de comidas por foto`. La clave se
+  guarda en el **Llavero** (`AIKeyStore`), no en `UserDefaults`: este
+  último es un plist en claro que viaja en cualquier copia de seguridad
+  sin cifrar. La del xcconfig sigue valiendo como respaldo.
+- **Web** — `Ajustes → Tu clave de IA`, en `localStorage`.
+
+**No viaja a la nube, y es deliberado.** Una clave de API en una tabla de
+Postgres acaba replicada en copias de seguridad y en cualquier volcado; si
+alguien la saca, la factura la paga su dueño. El precio es que hay que
+ponerla en cada dispositivo, y es el precio correcto. En la web, además,
+"guardada en este navegador" significa que quien tenga el portátil
+desbloqueado puede leerla desde las herramientas de desarrollo — la
+pantalla lo dice en vez de disimularlo.
+
+## Apple Watch (Ajustes → Apple Watch)
+
+Un interruptor de sí/no que, al encenderlo, **pide de verdad** los
+permisos de Salud y de notificaciones (`WatchHealthAccess`). Un "sí" que
+no pide nada dejaría la función apagada sin avisar.
+
+Por qué importa para la nutrición: la IA que mira la foto estima lo que
+**comes**, pero no sabe nada de lo que **gastas**. Sin reloj, las
+calorías gastadas salen de una fórmula con tu peso y tu edad — la media
+de una persona que no eres tú. Con reloj son tus pulsaciones y tu
+movimiento de hoy. Son las dos mitades de la misma cuenta.
+
+Dos cosas que impone iOS y que la pantalla explica en vez de esconder:
+
+1. **Solo se puede preguntar una vez.** Si dices que no, volver a pedirlo
+   no hace nada, así que Ajustes enseña la ruta a mano (Ajustes → Salud →
+   Acceso de apps → Habitium) en lugar de un botón que fingiría.
+2. **iOS nunca confirma un permiso de LECTURA.** `authorizationStatus`
+   solo es fiable para escribir; para leer devuelve siempre "no
+   determinado", a propósito, para que una app no pueda deducir que
+   tienes una condición médica por el hecho de que le niegues un dato.
+   Por eso se comprueba de la única forma que funciona: pidiendo permiso
+   y luego intentando leer.
+
+⚠️ **Con una cuenta de Apple gratuita el entitlement de HealthKit no se
+puede firmar.** Si al compilar salta un error de firma, quita las dos
+líneas `com.apple.developer.healthkit` del target `Habitium` en
+`project.yml`: la app funciona igual, solo que sin datos del reloj.
+
 ## Rediseño de Nutrición, Agenda y Finanzas
 
 Las tres pantallas que quedaron fuera del rediseño anterior. Ahora usan el

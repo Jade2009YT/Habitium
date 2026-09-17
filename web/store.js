@@ -23,13 +23,14 @@
 // cola para siempre.
 
 const DB_NAME = "habitium";
+// v3: subjects + grades + study_events (Estudios).
 // v2: xp_events + player_profiles (progresión). Subir este número es
 // OBLIGATORIO al añadir una tabla: onupgradeneeded solo se ejecuta
 // cuando la versión cambia, así que sin esto quien ya tuviera la app
 // abierta alguna vez se quedaría sin los almacenes nuevos y fallaría al
 // escribir, mientras que en un navegador nuevo funcionaría. Un fallo que
 // solo le pasa a los que ya la usaban es de los peores de encontrar.
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 /** Tablas replicadas en local. Deben existir en supabase/schema.sql. */
 export const TABLES = [
@@ -47,6 +48,9 @@ export const TABLES = [
   "habit_logs",
   "workout_sets",
   "xp_events",
+  "subjects",
+  "grades",
+  "study_events",
 ];
 
 /** Tablas con exactamente una fila por usuario: se emparejan por
@@ -181,9 +185,12 @@ export async function remove(table, id) {
   // Las tablas hijas caen por ON DELETE CASCADE en Postgres, pero eso
   // solo ocurre en el servidor — en local hay que limpiarlas a mano o
   // quedarían huérfanas hasta el siguiente pull.
-  const cascades = { habits: ["habit_logs"], medications: ["medication_dose_logs"] };
-  for (const child of cascades[table] ?? []) {
-    const key = table === "habits" ? "habit_id" : "medication_id";
+  const cascades = {
+    habits: [["habit_logs", "habit_id"]],
+    medications: [["medication_dose_logs", "medication_id"]],
+    subjects: [["grades", "subject_id"], ["study_events", "subject_id"]],
+  };
+  for (const [child, key] of cascades[table] ?? []) {
     for (const row of await idbAll(child)) {
       if (row[key] === id) await idbDelete(child, row.id);
     }

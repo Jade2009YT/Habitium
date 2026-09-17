@@ -369,6 +369,10 @@ struct UserSettingsDTO: Codable, Sendable {
     var preferredAIProvider: String
     var mealReminderNotificationsEnabled: Bool
     var eventNotificationsEnabled: Bool
+    // La CLAVE de IA no está aquí y no debe estarlo nunca: vive solo en
+    // el Llavero de cada dispositivo (ver AIKeyStore). Esto es solo el
+    // interruptor de "tengo Apple Watch", que sí conviene que viaje.
+    var appleWatchEnabled: Bool
     var displayName: String?
     var email: String?
     var updatedAt: Date
@@ -377,6 +381,7 @@ struct UserSettingsDTO: Codable, Sendable {
         case preferredAIProvider = "preferred_ai_provider"
         case mealReminderNotificationsEnabled = "meal_reminder_notifications_enabled"
         case eventNotificationsEnabled = "event_notifications_enabled"
+        case appleWatchEnabled = "apple_watch_enabled"
         case displayName = "display_name"
         case email
         case updatedAt = "updated_at"

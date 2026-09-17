@@ -139,6 +139,17 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 
+/* Un solo anillo de foco para todo lo que se puede pulsar.
+   Antes solo lo tenían las tarjetas que navegan, así que moverse por la
+   app con el teclado —o con el mando de accesibilidad— era ir a ciegas
+   por los botones, las pestañas y las filas. `:focus-visible` y no
+   `:focus`: así no aparece al pulsar con el dedo o el ratón. */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
 html { -webkit-text-size-adjust: 100%; }
 
 body {
@@ -438,9 +449,48 @@ input[type="date"] { min-height: 42px; }
 .topbar-date {
   font-size: 12.5px;
   color: var(--text-3);
-  text-transform: capitalize;
 }
 .topbar-title { font-size: 24px; letter-spacing: -0.02em; }
+.topbar-actions { display: flex; align-items: center; gap: 10px; }
+
+/* Nivel y racha en la cabecera, siempre a la vista.
+   La barra antes solo repetía el nombre de la vista, que ya sabes
+   porque acabas de pulsarla. Esto es lo que sí cambia mientras usas la
+   app, y verlo subir es media gracia del asunto. */
+.topbar-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px 5px 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  cursor: pointer;
+  font: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.topbar-chip:hover { border-color: var(--text-3); box-shadow: var(--shadow-sm); }
+.chip-level {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--purple);
+}
+.chip-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--orange);
+  padding-right: 6px;
+}
+.chip-streak.is-off { color: var(--text-3); }
 
 .banner {
   margin: 14px 18px 0;
@@ -454,16 +504,23 @@ input[type="date"] { min-height: 42px; }
 .banner.is-info { background: var(--blue-soft); color: var(--blue); }
 @media (min-width: 900px) { .banner { margin: 16px 32px 0; } }
 
-.view { padding: 18px; display: grid; gap: 4px; align-content: start; }
+/* Un único ritmo vertical para toda la app. Antes el hueco entre
+   bloques salía de sumar `gap: 4px` con los márgenes sueltos de cada
+   elemento, así que la separación cambiaba según qué hubiera debajo. */
+.view { padding: 18px; display: grid; gap: 14px; align-content: start; }
 @media (min-width: 900px) {
   .view { padding: 24px 32px; max-width: 1080px; }
+}
+@media (min-width: 1280px) {
+  /* En pantallas anchas la columna de 1080 dejaba medio monitor vacío. */
+  .view { max-width: 1240px; }
 }
 
 .section-title {
   display: flex;
   align-items: center;
   gap: 9px;
-  margin: 22px 0 10px;
+  margin: 8px 0 -4px;
   font-size: 12.5px;
   font-weight: 600;
   text-transform: uppercase;
@@ -490,6 +547,12 @@ input[type="date"] { min-height: 42px; }
   .grid-home { grid-template-columns: 1fr 1fr; }
   .card-hero { grid-column: 1 / -1; }
 }
+@media (min-width: 1280px) {
+  /* Tres columnas en monitor, con el resumen de nutrición ocupando dos:
+     sigue mandando, pero deja de ser una franja gigante y vacía. */
+  .grid-home { grid-template-columns: repeat(3, 1fr); }
+  .card-hero { grid-column: span 2; }
+}
 .grid-3 { grid-template-columns: repeat(3, 1fr); }
 
 .card {
@@ -508,6 +571,32 @@ input[type="date"] { min-height: 42px; }
   color: var(--text-3);
   margin-bottom: 8px;
 }
+/* Con pastilla de icono al lado, el título ya no necesita su margen: lo
+   pone la propia cabecera. */
+.card-head h2 { margin-bottom: 0; }
+
+/* ── Pastilla de icono ────────────────────────────────────────────
+   El mismo elemento que IconBadge en el iPhone: icono sobre el color
+   de su área al 15%. Es lo que más identidad da, y lo que hace que se
+   reconozca la sección sin leer el título — naranja es dinero, morado
+   es hábitos, en las dos plataformas. */
+
+.badge {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  line-height: 1;
+  background: color-mix(in srgb, var(--green) 15%, transparent);
+}
+.badge.blue { background: color-mix(in srgb, var(--blue) 15%, transparent); }
+.badge.orange { background: color-mix(in srgb, var(--orange) 15%, transparent); }
+.badge.purple { background: color-mix(in srgb, var(--purple) 15%, transparent); }
+.badge.pink { background: color-mix(in srgb, var(--pink) 15%, transparent); }
+.badge.sm { width: 26px; height: 26px; border-radius: 8px; font-size: 13px; }
 
 /* Tarjetas que navegan a su sección. En móvil son la única forma de
    llegar a Medicación y Ajustes, que no caben en la barra de pestañas. */
@@ -663,6 +752,12 @@ input[type="date"] { min-height: 42px; }
 
 .form-card { display: grid; gap: 14px; justify-items: start; margin-bottom: 14px; }
 .form-card h2 { margin: 0; }
+.form-card .card-head { margin-bottom: 0; }
+/* `justify-items: start` de la tarjeta encoge a sus hijos al ancho del
+   contenido, y eso dejaba las rejillas de muestras en una sola columna:
+   su `repeat(auto-fill, ...)` no tenía ancho contra el que repartirse. */
+.form-card .bg-picker,
+.form-card .accent-picker { width: 100%; }
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -748,14 +843,33 @@ input[type="date"] { min-height: 42px; }
 .streak { color: var(--orange); font-weight: 600; }
 .muted { font-size: 13px; color: var(--text-2); }
 
+/* Un vacío nunca debe ser una caja gris con una frase: dice qué falta,
+   y cuando se puede, trae el botón que lo arregla. Antes decía "Aún no
+   hay nada" y ahí se acababa la conversación. */
 .empty {
-  padding: 30px 18px;
+  padding: 28px 20px;
+  display: grid;
+  justify-items: center;
+  gap: 7px;
   text-align: center;
-  color: var(--text-3);
-  font-size: 14px;
   background: var(--surface);
   border: 1px dashed var(--border);
   border-radius: 12px;
+}
+.empty-icon {
+  font-size: 26px;
+  line-height: 1;
+  opacity: 0.75;
+}
+.empty-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.empty-hint {
+  font-size: 12.5px;
+  color: var(--text-3);
+  max-width: 34ch;
 }
 
 /* Barras por categoría (Finanzas) */
@@ -859,15 +973,21 @@ input[type="date"] { min-height: 42px; }
 .card-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
+  margin-bottom: 10px;
 }
 .card-head h2 { margin: 0; }
+/* Agrupa icono + título para que el contador de la derecha quede
+   empujado al borde con un solo `margin-left:auto`, en vez de depender
+   de un `space-between` que se desordena al añadir un tercer elemento. */
+.card-head-inner { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.card-head > .pill,
+.card-head > button { margin-left: auto; }
 
 /* .pill ya está definida más arriba (junto a .section-title) y sirve
    igual aquí: no se redefine para no tener dos verdades. */
 
-.challenge-list { list-style: none; margin: 12px 0 0 0; padding: 0; display: grid; gap: 8px; }
+.challenge-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 
 .challenge {
   display: flex;
@@ -920,7 +1040,6 @@ input[type="date"] { min-height: 42px; }
   gap: 8px;
   align-items: end;
   height: 116px;
-  margin-top: 12px;
 }
 /* Columna en flex y NO en grid: en grid la fila se autoajusta al
    contenido, así que la altura en porcentaje de la barra no tenía
@@ -949,7 +1068,7 @@ input[type="date"] { min-height: 42px; }
 .xp-day-value { font-size: 10px; font-weight: 700; color: var(--text-2); }
 
 /* Niveles del pase */
-.tier-list { list-style: none; margin: 12px 0 0 0; padding: 0; display: grid; gap: 8px; }
+.tier-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .tier {
   display: flex;
   align-items: center;
@@ -1006,7 +1125,10 @@ input[type="date"] { min-height: 42px; }
 
 .xp-toast {
   position: fixed;
-  top: max(14px, env(safe-area-inset-top));
+  /* Por debajo de la barra superior, no encima: antes tapaba la fecha y
+     el nivel justo en el momento en que acababas de ganar XP, que es
+     cuando más ganas tienes de mirarlos. */
+  top: calc(max(16px, env(safe-area-inset-top)) + 62px);
   left: 50%;
   z-index: 60;
   display: flex;
@@ -1151,6 +1273,216 @@ input[type="date"] { min-height: 42px; }
 
 .is-link { transition: transform 0.15s ease-out, box-shadow 0.15s ease-out; }
 .is-link:active { transform: scale(0.985); }
+
+/* ═══════════════ Estudios ═════════════════════════════════════════ */
+
+.subject-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
+  gap: 12px;
+}
+
+.subject {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  overflow: hidden;
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.18s, box-shadow 0.18s;
+}
+/* La franja de color de arriba es lo que hace que reconozcas la
+   asignatura antes de leer el nombre, igual que las pastillas de
+   color del resto de la app. */
+.subject::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--subject-color, var(--green));
+}
+.subject:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-color: var(--text-3); }
+.subject.is-active {
+  border-color: var(--subject-color, var(--green));
+  box-shadow: 0 0 0 1px var(--subject-color, var(--green));
+}
+
+.subject-top { display: flex; align-items: center; gap: 9px; }
+.subject-icon { font-size: 19px; line-height: 1; }
+.subject-name { font-size: 14.5px; font-weight: 600; line-height: 1.25; }
+.subject-mark {
+  margin-left: auto;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.subject-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+.tag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-3);
+}
+.tag.ok { color: var(--green); background: var(--green-soft); border-color: transparent; }
+.tag.great { color: var(--green); background: var(--green-soft); border-color: transparent; }
+.tag.warn { color: var(--orange); background: var(--orange-soft); border-color: transparent; }
+.tag.danger { color: var(--red); background: var(--red-soft); border-color: transparent; }
+.tag.info { color: var(--blue); background: var(--blue-soft); border-color: transparent; }
+.tag.muted { color: var(--text-3); }
+
+/* Tabla de notas. Con scroll propio: en un móvil seis columnas no caben,
+   y es preferible deslizar la tabla a romper la página entera. */
+.table-wrap { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 430px; }
+.tbl th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+  padding: 0 8px 8px;
+  white-space: nowrap;
+}
+.tbl th.num, .tbl td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.tbl th.mid, .tbl td.mid { text-align: center; }
+.tbl td { padding: 9px 8px; border-top: 1px solid var(--border); }
+.tbl tbody tr { transition: background 0.15s; }
+.tbl tbody tr:hover { background: var(--surface-2); }
+.tbl .grade-name { font-weight: 600; }
+.tbl tr.is-out { opacity: 0.5; }
+.tbl tr.is-out .grade-name { text-decoration: line-through; }
+.grade-score { font-weight: 700; }
+.grade-score.is-fail { color: var(--red); }
+.grade-score.is-pass { color: var(--green); }
+
+.composer-row.tight { margin-top: 12px; gap: 8px; }
+
+/* Escrito como `.composer-row > input.w-xs` y no como `.w-xs` a secas
+   porque la regla general de arriba es `.composer-row > input[type=...]`,
+   que tiene más peso que una clase suelta: con `.w-xs` solo, el campo del
+   icono se estiraba igual que el del nombre. */
+.composer-row > input.w-xs { flex: 0 0 86px; }
+.composer-row > input.w-sm { flex: 0 0 126px; }
+
+/* Cuenta atrás de un examen: cuanto más cerca, más grita. */
+.countdown {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.countdown.is-soon { color: var(--orange); background: var(--orange-soft); border-color: transparent; }
+.countdown.is-now { color: var(--red); background: var(--red-soft); border-color: transparent; }
+
+.att-bar { display: block; height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin-top: 6px; }
+.att-fill { display: block; height: 100%; border-radius: 999px; background: var(--green); transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+.att-fill.is-warn { background: var(--orange); }
+.att-fill.is-bad { background: var(--red); }
+
+
+/* ═══════════════ Fluidez ══════════════════════════════════════════
+   La diferencia entre "una web" y "una app" no son más animaciones:
+   es que las cosas lleguen y respondan en vez de aparecer y quedarse
+   quietas. Nada de aquí dura más de 0,4 s — una animación bonita la
+   primera vez es un peaje la número cincuenta, y esto se abre a diario.
+   Todo se desactiva entero con "Reducir movimiento". */
+
+/* El cambio de pantalla entra deslizando, no parpadeando. */
+.view:not([hidden]) {
+  animation: view-in 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes view-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Las tarjetas se levantan al pasar por encima: da la sensación de que
+   están ahí y responden, no de que son un dibujo. */
+.card { transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s, border-color 0.2s; }
+.is-link:hover { transform: translateY(-2px); }
+
+/* Filas: un desplazamiento mínimo al pasar por encima. Tres píxeles
+   bastan para que se note cuál está bajo el cursor sin que la lista
+   entera parezca que baila. */
+.row { transition: transform 0.16s ease-out, border-color 0.16s, background 0.16s; }
+.row:hover { transform: translateX(3px); }
+
+/* Botones: se hunden un poco al pulsarlos. */
+.btn { transition: filter 0.15s, background 0.15s, transform 0.1s cubic-bezier(0.22, 1, 0.36, 1); }
+.btn:active { transform: scale(0.96); }
+
+/* Pestañas del móvil: el icono da un saltito al activarse. */
+.tab.is-active span { animation: tab-pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes tab-pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.28) translateY(-2px); }
+  100% { transform: scale(1); }
+}
+
+/* La barra lateral marca la sección activa con una pestaña de color que
+   crece desde el borde, en vez de encenderse de golpe. */
+.side-item { position: relative; }
+.side-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 0;
+  border-radius: 0 3px 3px 0;
+  background: var(--green);
+  transform: translateY(-50%);
+  transition: height 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.side-item.is-active::before { height: 60%; }
+
+/* El anillo de calorías y las barras se llenan al entrar, no aparecen
+   ya llenos: ver subir el número es media gracia. */
+.ring-progress { transition: stroke-dashoffset 0.9s cubic-bezier(0.22, 1, 0.36, 1), stroke 0.3s; }
+
+/* Las asignaturas entran escalonadas, como las tarjetas del iPhone. */
+.subject { animation: rise-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+.subject:nth-child(2) { animation-delay: 0.04s; }
+.subject:nth-child(3) { animation-delay: 0.08s; }
+.subject:nth-child(4) { animation-delay: 0.12s; }
+.subject:nth-child(n + 5) { animation-delay: 0.16s; }
+
+/* Y las filas de una lista, igual. */
+.list > .row { animation: rise-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+.list > .row:nth-child(2) { animation-delay: 0.03s; }
+.list > .row:nth-child(3) { animation-delay: 0.06s; }
+.list > .row:nth-child(4) { animation-delay: 0.09s; }
+.list > .row:nth-child(n + 5) { animation-delay: 0.12s; }
+
+/* El cuentagotas de color, redondo y sin marco de navegador. */
+.accent-custom { position: relative; cursor: pointer; }
+.accent-custom input[type="color"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 34px;
+  opacity: 0;
+  cursor: pointer;
+  padding: 0;
+  border: 0;
+}
 
 /* ── Selector de fondo (Ajustes) ─────────────────────────────────
    Cada opción enseña el color de verdad con una tarjeta encima, que

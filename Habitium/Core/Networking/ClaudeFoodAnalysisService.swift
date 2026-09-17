@@ -18,7 +18,7 @@ final class ClaudeFoodAnalysisService: FoodVisionAnalyzing {
     private let model = "claude-sonnet-5"
     private let apiVersion = "2023-06-01"
 
-    init(apiKey: String? = AppConfiguration.anthropicAPIKey, session: URLSession = .shared) {
+    init(apiKey: String? = AIKeyStore.key(for: .claude), session: URLSession = .shared) {
         self.apiKey = apiKey
         self.session = session
     }

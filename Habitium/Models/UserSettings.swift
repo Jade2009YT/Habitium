@@ -32,6 +32,11 @@ final class UserSettings {
     var preferredAIProvider: AIProviderKind.RawValue
     var mealReminderNotificationsEnabled: Bool
     var eventNotificationsEnabled: Bool
+    /// Si el usuario dice tener un Apple Watch. No se detecta solo a
+    /// propósito: tener el reloj emparejado no significa querer que la
+    /// app lea tus datos de salud, y esa es una decisión que se pregunta,
+    /// no se supone.
+    var appleWatchEnabled: Bool = false
 
     /// Captured from Sign in with Apple the first time it's granted (Apple
     /// only hands these over once per user/app) — display-only, never
@@ -46,6 +51,7 @@ final class UserSettings {
         preferredAIProvider: AIProviderKind = .openAI,
         mealReminderNotificationsEnabled: Bool = true,
         eventNotificationsEnabled: Bool = true,
+        appleWatchEnabled: Bool = false,
         displayName: String? = nil,
         email: String? = nil,
         updatedAt: Date = .now
@@ -54,6 +60,7 @@ final class UserSettings {
         self.preferredAIProvider = preferredAIProvider.rawValue
         self.mealReminderNotificationsEnabled = mealReminderNotificationsEnabled
         self.eventNotificationsEnabled = eventNotificationsEnabled
+        self.appleWatchEnabled = appleWatchEnabled
         self.displayName = displayName
         self.email = email
         self.updatedAt = updatedAt

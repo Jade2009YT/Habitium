@@ -15,6 +15,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import * as store from "./store.js";
 import * as player from "./player.js";
 import * as prog from "./progression.js";
+import * as study from "./study.js";
 
 const cfg = window.HABITIUM_CONFIG;
 const isConfigured =
@@ -99,6 +100,21 @@ const esc = (s) =>
   );
 
 const byDateDesc = (a, b) => new Date(b.date) - new Date(a.date);
+
+/** Un vacío que dice qué falta y cómo llenarlo.
+ *
+ *  Antes cada lista vacía era una caja gris con una frase resignada
+ *  ("Aún no hay nada"). Eso deja a quien abre la app por primera vez
+ *  mirando cinco cajas grises sin saber por dónde empezar, que es
+ *  justo el momento en que se decide si la vuelve a abrir. */
+function emptyState(icon, title, hint = "") {
+  return `<li class="empty">
+            <span class="empty-icon" aria-hidden="true">${icon}</span>
+            <span class="empty-title">${esc(title)}</span>
+            ${hint ? `<span class="empty-hint">${esc(hint)}</span>` : ""}
+          </li>`;
+}
+
 
 // ── Indicador de sincronización ─────────────────────────────────────
 
@@ -204,6 +220,7 @@ $("sign-out-2").addEventListener("click", doSignOut);
 const NAV = [
   { id: "home", label: "Inicio", icon: "🏠" },
   { id: "progress", label: "Progreso", icon: "🏆" },
+  { id: "study", label: "Estudios", icon: "🎓" },
   { id: "nutrition", label: "Nutrición", icon: "🍎" },
   { id: "planner", label: "Agenda", icon: "📅" },
   { id: "finance", label: "Finanzas", icon: "💶" },
@@ -212,10 +229,10 @@ const NAV = [
   { id: "settings", label: "Ajustes", icon: "⚙️" },
 ];
 
-// La barra del móvil no puede con 8 destinos sin quedar ilegible.
-// Medicación y Ajustes se alcanzan desde las tarjetas de Inicio, y
-// Progreso desde la tarjeta de nivel que está arriba del todo.
-const MOBILE_TABS = ["home", "nutrition", "planner", "finance", "habits"];
+// La barra del móvil no puede con nueve destinos sin quedar ilegible.
+// Finanzas, Medicación y Ajustes se alcanzan desde las tarjetas de
+// Inicio, y Progreso desde la píldora de nivel de la cabecera.
+const MOBILE_TABS = ["home", "study", "nutrition", "planner", "habits"];
 
 function buildNav() {
   $("side-nav").innerHTML = NAV.map(
@@ -258,17 +275,65 @@ function go(view) {
   document.querySelectorAll(".tab").forEach((el) =>
     el.classList.toggle("is-active", el.dataset.view === view)
   );
-  $("topbar-title").textContent = NAV.find((n) => n.id === view)?.label ?? "";
+  // En Inicio la barra saluda en vez de repetir "Inicio", que es lo que
+  // acabas de pulsar. En el resto sí manda el nombre de la sección.
+  $("topbar-title").textContent =
+    view === "home" ? greeting() : (NAV.find((n) => n.id === view)?.label ?? "");
   window.scrollTo({ top: 0 });
   render();
+}
+
+/** "Buenos días" / "Buenas tardes" / "Buenas noches", con el nombre si
+ *  lo sabemos. El corte de las 21:00 y no de medianoche: a las once de
+ *  la noche nadie considera que sea "por la tarde". */
+function greeting() {
+  const h = new Date().getHours();
+  const saludo = h < 6 ? "Buenas noches" : h < 13 ? "Buenos días" : h < 21 ? "Buenas tardes" : "Buenas noches";
+  return displayName ? `${saludo}, ${displayName}` : saludo;
+}
+
+/** El nombre a mostrar: lo que haya antes de la @ del correo, con la
+ *  primera en mayúscula. No es el nombre real, pero "Buenas tardes,
+ *  Rodrigo" se lee mucho mejor que el correo entero en una cabecera. */
+let displayName = "";
+async function setDisplayName(email) {
+  const guardado = (await store.getSingleton("user_settings"))?.display_name;
+  if (guardado && guardado.trim()) {
+    displayName = guardado.trim().split(" ")[0];
+    return;
+  }
+  // Sin nombre guardado se saca del correo, quitando los números: hay
+  // correos que son el nombre repetido y una cifra, y eso en una
+  // cabecera queda fatal.
+  const base = String(email ?? "").split("@")[0].replace(/[._-]+/g, " ").replace(/\d+/g, "").trim();
+  const primeraPalabra = base.split(" ")[0] ?? "";
+  displayName = primeraPalabra
+    ? primeraPalabra.charAt(0).toUpperCase() + primeraPalabra.slice(1).toLowerCase()
+    : "";
+}
+
+/** Nivel y racha en la cabecera. Se repinta con cada cambio, así que
+ *  subir de nivel se ve ahí arriba sin tener que ir a Progreso. */
+async function renderTopbarChip() {
+  const profile = await player.profile();
+  const racha = profile.login_streak ?? 0;
+
+  $("chip-level").textContent = prog.levelForTotalXP(profile.total_xp);
+  $("chip-streak-n").textContent = racha;
+  // Sin racha, la llama se apaga en vez de desaparecer: que el hueco no
+  // baile, pero que tampoco parezca que tienes una racha de cero.
+  $("chip-streak").classList.toggle("is-off", racha === 0);
+  $("topbar-chip").title = `Nivel ${prog.levelForTotalXP(profile.total_xp)} · ${racha} día${racha === 1 ? "" : "s"} seguidos`;
 }
 
 /** Repinta la vista activa desde los datos locales. */
 async function render() {
   renderSyncBanner();
+  renderTopbarChip().catch(() => {});
   await {
     home: loadHome,
     progress: loadProgress,
+    study: loadStudy,
     nutrition: loadNutrition,
     planner: loadPlanner,
     finance: loadFinance,
@@ -316,7 +381,7 @@ async function loadNutrition() {
 
   const list = $("food-list");
   if (!entries.length) {
-    list.innerHTML = `<li class="empty">Aún no has registrado nada hoy.</li>`;
+    list.innerHTML = emptyState("🍽️", "Nada registrado hoy", "Escribe arriba qué has comido y sus calorías.");
     return;
   }
 
@@ -371,12 +436,12 @@ async function loadPlanner() {
   const pending = tasks.filter((t) => !t.is_completed);
   $("task-count").textContent = String(pending.length);
   renderTasks($("task-list"), pending, "No tienes tareas pendientes. 🎉");
-  renderTasks($("task-done-list"), tasks.filter((t) => t.is_completed), "Nada completado todavía.");
+  renderTasks($("task-done-list"), tasks.filter((t) => t.is_completed), "Nada completado todavía", "✅", "Lo que vayas marcando aparecerá aquí.");
 }
 
-function renderTasks(list, tasks, emptyText) {
+function renderTasks(list, tasks, emptyText, emptyIcon = "📋", emptyHint = "") {
   if (!tasks.length) {
-    list.innerHTML = `<li class="empty">${emptyText}</li>`;
+    list.innerHTML = emptyState(emptyIcon, emptyText, emptyHint);
     return;
   }
 
@@ -490,11 +555,11 @@ async function loadFinance() {
         </div>`
         )
         .join("")
-    : `<p class="empty">Sin gastos este mes.</p>`;
+    : `<p class="empty"><span class="empty-icon" aria-hidden="true">🥧</span><span class="empty-title">Sin gastos este mes</span><span class="empty-hint">En cuanto apuntes uno verás en qué se te va el dinero.</span></p>`;
 
   const list = $("tx-list");
   if (!txs.length) {
-    list.innerHTML = `<li class="empty">Sin movimientos este mes.</li>`;
+    list.innerHTML = emptyState("💶", "Sin movimientos este mes", "Apunta un gasto o un ingreso con el formulario de arriba.");
     return;
   }
 
@@ -614,7 +679,7 @@ async function loadHabits() {
   const list = $("habit-list");
 
   if (!habits.length) {
-    list.innerHTML = `<li class="empty">Aún no tienes hábitos. Añade uno arriba o toca una plantilla.</li>`;
+    list.innerHTML = emptyState("🔁", "Aún no tienes hábitos", "Toca una plantilla de arriba: en dos segundos tienes el primero.");
     return;
   }
 
@@ -777,7 +842,7 @@ async function loadMedication() {
       </li>`
         )
         .join("")
-    : `<li class="empty">No tienes tomas programadas para hoy.</li>`;
+    : emptyState("💊", "Ninguna toma para hoy", "Si tomas algo a diario, añádelo abajo y te lo recordamos.");
 
   list.querySelectorAll("[data-dose]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -804,7 +869,7 @@ async function loadMedication() {
       </li>`
         )
         .join("")
-    : `<li class="empty">Aún no has añadido ningún medicamento.</li>`;
+    : emptyState("💊", "Ningún medicamento", "Añade uno con sus horas y aparecerá en tus tomas del día.");
 
   wireDelete(medList, "medications");
 }
@@ -877,6 +942,9 @@ async function loadSettings() {
   $("budget-monthly").value = budget?.monthly_budget ?? 1000;
   $("budget-savings").value = budget?.total_savings ?? 0;
   $("budget-currency").value = budget?.currency_code ?? "EUR";
+
+  renderAccentPicker();
+  renderAIKey();
 
   const { data } = await supabase.auth.getUser();
   $("settings-email").textContent = data?.user?.email ?? "";
@@ -1136,47 +1204,84 @@ const ACCENT_KEY = "habitium.accent";
 function currentAccent() {
   try {
     const saved = localStorage.getItem(ACCENT_KEY);
-    if (saved && prog.ACCENTS[saved]) return saved;
+    if (saved && (prog.ACCENTS[saved] || /^#[0-9a-f]{6}$/i.test(saved))) return saved;
   } catch (e) {
     // Almacenamiento bloqueado.
   }
   return "classic";
 }
 
-function applyAccent(id) {
-  // El clásico no pone atributo: así el CSS de :root vale tal cual.
-  if (id === "classic") document.documentElement.removeAttribute("data-accent");
-  else document.documentElement.setAttribute("data-accent", id);
+function applyAccent(valor) {
+  const root = document.documentElement;
+  const esHex = /^#[0-9a-f]{6}$/i.test(valor);
+
+  if (esHex) {
+    // Color a medida: se pisa la variable directamente. El tono suave se
+    // saca del mismo color con transparencia, así que funciona igual
+    // sobre fondo claro que sobre fondo oscuro sin calcular dos paletas.
+    root.removeAttribute("data-accent");
+    root.style.setProperty("--green", valor);
+    root.style.setProperty("--green-soft", `color-mix(in srgb, ${valor} 16%, transparent)`);
+  } else {
+    root.style.removeProperty("--green");
+    root.style.removeProperty("--green-soft");
+    // El clásico no pone atributo: así el CSS de :root vale tal cual.
+    if (valor === "classic") root.removeAttribute("data-accent");
+    else root.setAttribute("data-accent", valor);
+  }
+
   try {
-    localStorage.setItem(ACCENT_KEY, id);
+    localStorage.setItem(ACCENT_KEY, valor);
   } catch (e) {
     // Sin guardar: aguanta esta sesión y punto.
   }
+  updateThemeColor(currentBackground());
 }
 
-async function renderAccentPicker(profile) {
+async function renderAccentPicker() {
+  const profile = await player.profile();
   const disponibles = new Set(prog.availableAccents(profile.unlocked_reward_ids));
   const activo = currentAccent();
+  const esPersonalizado = /^#[0-9a-f]{6}$/i.test(activo);
   const host = $("accent-picker");
+  if (!host) return;
 
-  host.innerHTML = Object.entries(prog.ACCENTS)
+  const presets = Object.entries(prog.ACCENTS)
     .map(([id, a]) => {
       const libre = disponibles.has(id);
       return `<button class="accent-opt" type="button" data-accent-id="${id}"
                       aria-pressed="${id === activo}" ${libre ? "" : "disabled"}
-                      title="${libre ? a.name : `${a.name} — bloqueado`}">
+                      title="${libre ? a.name : `${a.name} — se desbloquea en el pase`}">
                 <span class="accent-dot" style="background:${a.color}">${libre ? (id === activo ? "✓" : "") : "🔒"}</span>
                 <span>${a.name}</span>
               </button>`;
     })
     .join("");
 
+  // El cuentagotas siempre está disponible, sin candado. Los temas con
+  // nombre se ganan en el pase porque son identidad; poder poner TU color
+  // no es un premio que haya que merecer.
+  const personalizado = `
+    <label class="accent-opt accent-custom" title="Tu propio color">
+      <span class="accent-dot" style="background:${esPersonalizado ? activo : "conic-gradient(#f43f5e,#f59e0b,#22c55e,#3b82f6,#a855f7,#f43f5e)"}">
+        ${esPersonalizado ? "✓" : ""}
+      </span>
+      <span>El tuyo</span>
+      <input type="color" id="accent-custom" value="${esPersonalizado ? activo : "#2563eb"}">
+    </label>`;
+
+  host.innerHTML = presets + personalizado;
+
   host.querySelectorAll("[data-accent-id]").forEach((btn) => {
     btn.addEventListener("click", () => {
       applyAccent(btn.dataset.accentId);
-      renderAccentPicker(profile);
+      renderAccentPicker();
     });
   });
+  // `input` y no `change`: el color va cambiando mientras arrastras por
+  // la rueda, así se ve el efecto en la app en tiempo real.
+  $("accent-custom")?.addEventListener("input", (e) => applyAccent(e.target.value));
+  $("accent-custom")?.addEventListener("change", () => renderAccentPicker());
 }
 
 // ── Pantalla de Progreso ────────────────────────────────────────────
@@ -1247,8 +1352,6 @@ async function loadProgress() {
             </li>`;
   }).join("");
 
-  await renderAccentPicker(profile);
-
   // Historial
   const eventos = await player.recentEvents(12);
   $("xp-log").innerHTML = eventos.length
@@ -1265,8 +1368,329 @@ async function loadProgress() {
                   </li>`;
         })
         .join("")
-    : `<li class="empty">Todavía no has ganado puntos. Cumple un hábito o completa una tarea.</li>`;
+    : emptyState("⭐", "Todavía no has ganado puntos", "Cumple un hábito o completa una tarea y verás subir el nivel.");
 }
+
+
+
+// ── Clave de IA ─────────────────────────────────────────────────────
+//
+// Cada uno pone la suya. Vive en localStorage y NO viaja a Supabase, por
+// la misma razón que en el iPhone: una clave de API guardada en una base
+// de datos acaba replicada en copias de seguridad, y si alguien la saca
+// la factura la paga su dueño.
+//
+// Aviso honesto que también sale en pantalla: en un navegador, "guardada
+// en este dispositivo" significa que quien tenga el dispositivo
+// desbloqueado puede leerla desde las herramientas de desarrollo. Es
+// aceptable para tu propia clave en tu propio portátil, y es la razón de
+// que Ajustes diga dónde está y no la esconda como si fuera segura.
+
+const AI_KEY = "habitium.aikey";
+const AI_PROVIDER_KEY = "habitium.aiprovider";
+const AI_HELP = {
+  openai: "https://platform.openai.com/api-keys",
+  anthropic: "https://console.anthropic.com/settings/keys",
+};
+
+const aiProvider = () => {
+  try { return localStorage.getItem(AI_PROVIDER_KEY) || "openai"; } catch (e) { return "openai"; }
+};
+const aiKeyFor = (proveedor) => {
+  try { return localStorage.getItem(`${AI_KEY}.${proveedor}`) || ""; } catch (e) { return ""; }
+};
+
+/** Solo el principio y el final: lo justo para reconocer cuál pusiste. */
+const enmascarar = (clave) =>
+  clave.length > 12 ? `${clave.slice(0, 6)}••••••${clave.slice(-4)}` : "•".repeat(Math.max(clave.length, 4));
+
+function renderAIKey() {
+  const host = $("ai-provider");
+  if (!host) return;
+  const proveedor = aiProvider();
+  const clave = aiKeyFor(proveedor);
+
+  host.value = proveedor;
+  $("ai-key").value = "";
+  $("ai-key").placeholder = clave ? enmascarar(clave) : proveedor === "openai" ? "sk-…" : "sk-ant-…";
+  $("ai-help").href = AI_HELP[proveedor];
+  $("ai-status").textContent = clave
+    ? "Clave guardada en este navegador. El análisis por foto está listo."
+    : "Sin clave: puedes apuntar las comidas a mano igual, pero no reconocerlas por foto.";
+}
+
+$("ai-provider")?.addEventListener("change", (e) => {
+  try { localStorage.setItem(AI_PROVIDER_KEY, e.target.value); } catch (err) {}
+  renderAIKey();
+});
+
+$("ai-save")?.addEventListener("click", () => {
+  const clave = $("ai-key").value.trim();
+  if (!clave) return;
+  try { localStorage.setItem(`${AI_KEY}.${aiProvider()}`, clave); } catch (e) {}
+  renderAIKey();
+  $("ai-status").textContent = "Guardada ✓";
+});
+
+$("ai-clear")?.addEventListener("click", () => {
+  try { localStorage.removeItem(`${AI_KEY}.${aiProvider()}`); } catch (e) {}
+  renderAIKey();
+});
+
+// ── Estudios ────────────────────────────────────────────────────────
+//
+// El módulo que cierra la idea original del sistema de niveles: "cada
+// día que inicies sesión, luego que saques buenas notas, etc., vas a
+// subir de nivel". Hasta ahora la parte de las notas no existía.
+//
+// Todo lo que se calcula (media, asistencia, cuenta atrás) vive en
+// study.js y está probado aparte. Aquí solo se pinta.
+
+/** La asignatura abierta en la calculadora. Se recuerda entre repintados
+ *  para que apuntar una nota no te devuelva a la primera de la lista. */
+let subjectAbierta = null;
+
+const PALETA_ASIGNATURAS = ["#2563eb", "#db2777", "#ea580c", "#15a34a", "#7c3aed", "#0891b2", "#ca8a04"];
+
+async function loadStudy() {
+  const subjects = (await store.all("subjects")).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  const grades = await store.all("grades");
+  const events = await store.all("study_events");
+
+  if (!subjects.some((s) => s.id === subjectAbierta)) {
+    subjectAbierta = subjects[0]?.id ?? null;
+  }
+
+  renderStudyEvents(events, subjects);
+  renderSubjects(subjects, grades);
+  renderGrades(subjects, grades);
+  renderAttendance(subjects, grades);
+}
+
+function renderStudyEvents(events, subjects) {
+  const proximos = study.upcoming(events);
+  const nombre = (id) => subjects.find((s) => s.id === id)?.name ?? "";
+
+  $("study-events").innerHTML = proximos.length
+    ? proximos
+        .map((e) => {
+          const tipo = study.eventKind(e.kind);
+          const dias = study.daysUntil(e.date);
+          const clase = dias <= 1 ? "is-now" : dias <= 5 ? "is-soon" : "";
+          return `<li class="row">
+                    <div class="row-icon">${tipo.icon}</div>
+                    <div class="row-main">
+                      <div class="row-title">${esc(e.title)}</div>
+                      <div class="row-sub">
+                        <span class="tag ${tipo.tone}">${tipo.label}</span>
+                        ${e.subject_id ? `<span>${esc(nombre(e.subject_id))}</span>` : ""}
+                        <span>${dayOf(e.date)}</span>
+                      </div>
+                    </div>
+                    <span class="countdown ${clase}">${study.countdownLabel(e.date)}</span>
+                    <button class="delete" data-del-event="${e.id}" title="Eliminar">✕</button>
+                  </li>`;
+        })
+        .join("")
+    : emptyState("🗓️", "Nada a la vista", "Apunta tu próximo examen o entrega y verás la cuenta atrás.");
+
+  $("study-events").querySelectorAll("[data-del-event]").forEach((b) => {
+    b.addEventListener("click", () => store.remove("study_events", b.dataset.delEvent));
+  });
+}
+
+function renderSubjects(subjects, grades) {
+  const host = $("subject-grid");
+  if (!subjects.length) {
+    host.innerHTML = `<div class="empty"><span class="empty-icon">🎓</span>
+      <span class="empty-title">Aún no hay asignaturas</span>
+      <span class="empty-hint">Añade la primera abajo y podrás llevar sus notas y sus faltas.</span></div>`;
+    $("study-overall").textContent = "—";
+    return;
+  }
+
+  const medias = subjects
+    .map((s) => study.weightedAverage(grades.filter((g) => g.subject_id === s.id)))
+    .filter((m) => m !== null);
+  $("study-overall").textContent = medias.length
+    ? `${(medias.reduce((a, b) => a + b, 0) / medias.length).toFixed(2)} de media`
+    : "sin notas";
+
+  host.innerHTML = subjects
+    .map((s) => {
+      const suyas = grades.filter((g) => g.subject_id === s.id);
+      const media = study.weightedAverage(suyas);
+      const estado = study.subjectStatus(s, suyas);
+      const cubierto = Math.round(study.weightCovered(suyas) * 100);
+      return `<button class="subject ${s.id === subjectAbierta ? "is-active" : ""}" type="button"
+                      data-subject="${s.id}" style="--subject-color:${esc(s.color || "#2563eb")}">
+                <span class="subject-top">
+                  <span class="subject-icon" aria-hidden="true">${s.icon || "📘"}</span>
+                  <span class="subject-name">${esc(s.name)}</span>
+                  <span class="subject-mark" style="color:${media === null ? "var(--text-3)" : media < study.PASS_MARK ? "var(--red)" : "var(--green)"}">
+                    ${media === null ? "—" : media.toFixed(1)}
+                  </span>
+                </span>
+                <span class="subject-meta">
+                  <span class="tag ${estado.tone}">${estado.label}</span>
+                  <span class="tag muted">${cubierto} % evaluado</span>
+                </span>
+              </button>`;
+    })
+    .join("");
+
+  host.querySelectorAll("[data-subject]").forEach((b) => {
+    b.addEventListener("click", () => {
+      subjectAbierta = b.dataset.subject;
+      loadStudy();
+    });
+  });
+}
+
+function renderGrades(subjects, grades) {
+  const asignatura = subjects.find((s) => s.id === subjectAbierta);
+  $("grades-card").hidden = !asignatura;
+  if (!asignatura) return;
+
+  const suyas = grades
+    .filter((g) => g.subject_id === asignatura.id)
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  $("grades-subject-name").textContent = asignatura.name;
+  $("grades-body").innerHTML = suyas.length
+    ? suyas
+        .map(
+          (g) => `<tr class="${g.counts_for_average ? "" : "is-out"}">
+            <td class="grade-name">${esc(g.name)}</td>
+            <td class="num"><span class="grade-score ${Number(g.score) < study.PASS_MARK ? "is-fail" : "is-pass"}">${Number(g.score).toFixed(2).replace(/\.?0+$/, "")}</span></td>
+            <td class="num">${Number(g.weight)} %</td>
+            <td class="num">${study.weightedPoints(g).toFixed(2)}</td>
+            <td class="mid"><input type="checkbox" data-count="${g.id}" ${g.counts_for_average ? "checked" : ""} aria-label="Cuenta para la media"></td>
+            <td class="mid"><button class="delete" data-del-grade="${g.id}" title="Eliminar">✕</button></td>
+          </tr>`
+        )
+        .join("")
+    : `<tr><td colspan="6" class="muted sm" style="padding:14px 8px">Sin notas todavía. Apunta la primera abajo.</td></tr>`;
+
+  const media = study.weightedAverage(suyas);
+  const falta = study.neededInRemaining(suyas, 5);
+  const partes = [];
+  if (media !== null) partes.push(`Media de lo evaluado: ${media.toFixed(2)}`);
+  partes.push(`Llevas ${study.pointsSoFar(suyas).toFixed(2)} puntos de 10`);
+  if (falta !== null && falta > 0) {
+    partes.push(
+      falta > 10
+        ? "Con lo que queda ya no da para el 5 — habla con el profesor"
+        : `Necesitas un ${falta.toFixed(1)} en lo que queda para aprobar`
+    );
+  }
+  $("grade-summary").textContent = partes.join(" · ");
+
+  $("grades-body").querySelectorAll("[data-del-grade]").forEach((b) => {
+    b.addEventListener("click", () => store.remove("grades", b.dataset.delGrade));
+  });
+  $("grades-body").querySelectorAll("[data-count]").forEach((c) => {
+    c.addEventListener("change", () =>
+      store.update("grades", c.dataset.count, { counts_for_average: c.checked })
+    );
+  });
+}
+
+function renderAttendance(subjects, grades) {
+  const conClases = subjects.filter((s) => (Number(s.total_classes) || 0) > 0);
+  $("attendance-list").innerHTML = conClases.length
+    ? conClases
+        .map((s) => {
+          const pct = study.attendance(s) ?? 100;
+          const quedan = study.absencesLeft(s);
+          const clase = pct < 75 ? "is-bad" : pct < 85 ? "is-warn" : "";
+          return `<li class="row">
+                    <div class="row-icon">${s.icon || "📘"}</div>
+                    <div class="row-main">
+                      <div class="row-title">${esc(s.name)}</div>
+                      <div class="row-sub">
+                        <span>${s.hours_missed || 0} de ${s.total_classes} h faltadas</span>
+                        ${quedan === null ? "" : `<span class="tag ${quedan < 0 ? "danger" : quedan <= 2 ? "warn" : "muted"}">${quedan < 0 ? `${Math.abs(quedan)} h pasado` : `te quedan ${quedan} h`}</span>`}
+                      </div>
+                      <span class="att-bar"><span class="att-fill ${clase}" style="width:${pct}%"></span></span>
+                    </div>
+                    <div class="row-value">${Math.round(pct)} %</div>
+                    <button class="btn btn-ghost btn-sm" data-miss="${s.id}" title="Sumar una hora faltada">+1 falta</button>
+                  </li>`;
+        })
+        .join("")
+    : emptyState("📍", "Sin asistencia que seguir", "Pon el número de clases de una asignatura y llevaremos la cuenta.");
+
+  $("attendance-list").querySelectorAll("[data-miss]").forEach((b) => {
+    b.addEventListener("click", async () => {
+      const s = subjects.find((x) => x.id === b.dataset.miss);
+      if (s) await store.update("subjects", s.id, { hours_missed: (Number(s.hours_missed) || 0) + 1 });
+    });
+  });
+}
+
+$("subject-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const existentes = await store.all("subjects");
+  await store.insert("subjects", {
+    name: $("subject-name").value.trim(),
+    icon: $("subject-icon").value.trim() || "📘",
+    color: PALETA_ASIGNATURAS[existentes.length % PALETA_ASIGNATURAS.length],
+    teacher: null,
+    total_classes: Number($("subject-classes").value) || 0,
+    hours_missed: 0,
+    max_absences: Number($("subject-max").value) || 0,
+    sort_order: existentes.length,
+  });
+  e.target.reset();
+});
+
+$("grade-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!subjectAbierta) return;
+
+  const score = Number($("grade-score").value);
+  const fila = await store.insert("grades", {
+    subject_id: subjectAbierta,
+    name: $("grade-name").value.trim(),
+    score,
+    weight: Number($("grade-weight").value) || 0,
+    counts_for_average: true,
+    date: nowISO(),
+  });
+  e.target.reset();
+
+  // Apuntar da poco; sacar buena nota da bastante. Si diera lo mismo, lo
+  // rentable sería inventarse pruebas en vez de estudiar.
+  await awardXP("gradeLogged", `grade:${idKey(fila.id)}`);
+  if (score >= 7) await awardXP("goodGrade", `goodgrade:${idKey(fila.id)}`);
+
+  // Y si con esta nota la asignatura pasa a estar aprobada, se premia
+  // una vez por asignatura y mes: es un logro real, no una tirada.
+  const suyas = (await store.all("grades")).filter((g) => g.subject_id === subjectAbierta);
+  const media = study.weightedAverage(suyas);
+  if (media !== null && media >= study.PASS_MARK) {
+    await awardXP("subjectPassing", `passing:${idKey(subjectAbierta)}:${prog.currentSeasonID()}`);
+  }
+});
+
+$("study-add-event").addEventListener("click", async () => {
+  const title = prompt("¿Qué es? (ej: Examen de Estadística)");
+  if (!title) return;
+  const cuando = prompt("¿Qué día? (dd/mm/aaaa)");
+  if (!cuando) return;
+  const [d, m, a] = cuando.split(/[\/\-\.]/).map(Number);
+  const fecha = new Date(a ?? new Date().getFullYear(), (m ?? 1) - 1, d ?? 1, 9);
+  if (Number.isNaN(fecha.getTime())) return;
+
+  await store.insert("study_events", {
+    subject_id: subjectAbierta,
+    title: title.trim(),
+    kind: /examen|parcial|final/i.test(title) ? "exam" : /entrega|trabajo/i.test(title) ? "assignment" : "exam",
+    date: fecha.toISOString(),
+    notes: null,
+  });
+});
 
 // ── Inicio ──────────────────────────────────────────────────────────
 
@@ -1336,6 +1760,27 @@ async function loadHome() {
     .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))[0];
   $("home-next").textContent = next?.title ?? "Nada pendiente";
   $("home-next-detail").textContent = next?.due_date ? dayOf(next.due_date) : "";
+
+  // Estudios: lo más cercano manda. Un examen dentro de tres días es
+  // más urgente que la media del curso, y es lo que quieres ver al abrir.
+  const subjects = await store.all("subjects");
+  const proximo = study.upcoming(await store.all("study_events"), new Date(), 1)[0];
+  if (proximo) {
+    $("home-study").textContent = study.countdownLabel(proximo.date);
+    $("home-study-detail").textContent = `${study.eventKind(proximo.kind).label} · ${proximo.title}`;
+  } else if (subjects.length) {
+    const todas = await store.all("grades");
+    const medias = subjects
+      .map((s) => study.weightedAverage(todas.filter((g) => g.subject_id === s.id)))
+      .filter((m) => m !== null);
+    $("home-study").textContent = medias.length
+      ? (medias.reduce((a, b) => a + b, 0) / medias.length).toFixed(2)
+      : "—";
+    $("home-study-detail").textContent = medias.length ? "de media este curso" : "Aún sin notas";
+  } else {
+    $("home-study").textContent = "—";
+    $("home-study-detail").textContent = "Añade tus asignaturas";
+  }
 
   // Próxima toma
   const { doses } = await todaysDoses();
@@ -1419,29 +1864,35 @@ async function showApp() {
   $("auth-screen").hidden = true;
   $("app").hidden = false;
 
-  $("topbar-date").textContent = new Date().toLocaleDateString("es-ES", {
+  const fecha = new Date().toLocaleDateString("es-ES", {
     weekday: "long",
     day: "numeric",
     month: "long",
   });
+  $("topbar-date").textContent = fecha.charAt(0).toUpperCase() + fecha.slice(1);
 
   const { data } = await supabase.auth.getUser();
   const email = data?.user?.email ?? "";
+  await setDisplayName(email);
   $("side-email").textContent = email;
   $("side-avatar").textContent = email.charAt(0) || "·";
 
   go("home");        // pinta ya, desde lo que haya en local
 
-  // Cuenta el día y actualiza la racha. Es idempotente: abrir la web
-  // diez veces hoy solo cuenta una. Va después de pintar para que no
-  // retrase la primera pantalla.
+  // Primero traer lo que haya en la nube, y SOLO DESPUÉS contar el día.
+  //
+  // Al revés tiene un fallo serio: en un dispositivo nuevo no hay perfil
+  // local, así que registrar el acceso crea uno con racha 1 y fecha de
+  // ahora mismo. Ese perfil es "más reciente" que el del móvil, gana la
+  // fusión, y la racha de verdad —siete días -- se pierde en los dos
+  // sitios. La pantalla ya está pintada, así que esperar aquí no se nota.
+  await store.sync();
+
   try {
     await player.registerDailyLogin();
   } catch (error) {
     console.warn("racha:", error);
   }
-
-  store.sync();      // y actualiza por detrás
 }
 
 buildNav();

@@ -849,6 +849,7 @@ final class CloudSyncService {
                 settings.preferredAIProvider = dto.preferredAIProvider
                 settings.mealReminderNotificationsEnabled = dto.mealReminderNotificationsEnabled
                 settings.eventNotificationsEnabled = dto.eventNotificationsEnabled
+                settings.appleWatchEnabled = dto.appleWatchEnabled
                 settings.displayName = dto.displayName
                 settings.email = dto.email
                 settings.updatedAt = dto.updatedAt
@@ -858,6 +859,7 @@ final class CloudSyncService {
                     preferredAIProvider: settings.preferredAIProvider,
                     mealReminderNotificationsEnabled: settings.mealReminderNotificationsEnabled,
                     eventNotificationsEnabled: settings.eventNotificationsEnabled,
+                    appleWatchEnabled: settings.appleWatchEnabled,
                     displayName: settings.displayName,
                     email: settings.email,
                     updatedAt: settings.updatedAt

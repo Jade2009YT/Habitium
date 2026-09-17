@@ -18,6 +18,11 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: SettingsViewModel?
     @State private var selectedAccent: AccentTheme = AccentThemeStore.current
+    @State private var apiKeyField: String = ""
+    @State private var savedKeyConfirmation = false
+    @State private var watchPermissionState: WatchPermissionState = .idle
+
+    enum WatchPermissionState { case idle, asking, granted, denied }
 
     var body: some View {
         NavigationStack {
@@ -31,6 +36,7 @@ struct SettingsView: View {
                         goalsSection(viewModel)
                         adaptiveGoalSection(viewModel)
                         aiSection(viewModel)
+                        watchSection(viewModel)
                         notificationsSection(viewModel)
                         currencySection(viewModel)
                         subscriptionSection
@@ -57,6 +63,7 @@ struct SettingsView: View {
                 if viewModel == nil {
                     viewModel = SettingsViewModel(container: container)
                 }
+                apiKeyField = AIKeyStore.userKey(for: viewModel?.preferredAIProvider ?? .openAI) ?? ""
             }
         }
     }
@@ -246,19 +253,128 @@ struct SettingsView: View {
         }
     }
 
+    /// Proveedor de IA y la clave de cada uno.
+    ///
+    /// Antes la clave solo podía venir del archivo de compilación, o sea
+    /// de quien construye la app. Eso dejaba sin análisis de comidas a
+    /// cualquiera que se la instale — y sin manera de arreglarlo desde
+    /// dentro. Ahora cada uno pone la suya y se guarda en el Llavero.
     private func aiSection(_ viewModel: SettingsViewModel) -> some View {
-        Section {
-            Picker("Proveedor de IA", selection: Bindable(viewModel).preferredAIProvider) {
+        let provider = viewModel.preferredAIProvider
+        let source = AIKeyStore.source(for: provider)
+
+        return Section {
+            Picker("Servicio", selection: Bindable(viewModel).preferredAIProvider) {
                 ForEach(AIProviderKind.allCases) { provider in
                     Text(provider.displayName).tag(provider)
                 }
             }
-            .onChange(of: viewModel.preferredAIProvider) { _, _ in viewModel.savePreferences() }
+            .onChange(of: viewModel.preferredAIProvider) { _, _ in
+                viewModel.savePreferences()
+                apiKeyField = AIKeyStore.userKey(for: viewModel.preferredAIProvider) ?? ""
+                savedKeyConfirmation = false
+            }
+
+            HStack {
+                Image(systemName: source == .none ? "exclamationmark.triangle.fill" : "checkmark.seal.fill")
+                    .foregroundStyle(source == .none ? Theme.Colors.danger : Theme.Colors.nutrition)
+                Text(source.explanation)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            SecureField("Pega aquí tu clave", text: $apiKeyField)
+                .textContentType(.password)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .onSubmit { saveAPIKey(for: provider) }
+
+            HStack {
+                Button(savedKeyConfirmation ? "Guardada ✓" : "Guardar clave") {
+                    saveAPIKey(for: provider)
+                }
+                .disabled(apiKeyField.trimmingCharacters(in: .whitespaces).isEmpty)
+
+                Spacer()
+
+                if AIKeyStore.userKey(for: provider) != nil {
+                    Button("Quitar", role: .destructive) {
+                        AIKeyStore.setUserKey(nil, for: provider)
+                        apiKeyField = ""
+                        savedKeyConfirmation = false
+                        Haptics.tap()
+                    }
+                }
+            }
+
+            if let url = AIKeyStore.helpURL(for: provider) {
+                Link("¿De dónde saco la clave?", destination: url)
+                    .font(.caption)
+            }
         } header: {
-            Text("Análisis de comidas")
+            Text("Análisis de comidas por foto")
         } footer: {
-            Text("Requiere la API key correspondiente en Configuration/Secrets.xcconfig.")
+            Text("Tu clave se guarda cifrada en este iPhone y NO se sincroniza: ponla en cada dispositivo donde la quieras. No viaja a la nube a propósito — una clave en una base de datos acaba en una copia de seguridad, y la factura la pagarías tú.")
         }
+    }
+
+    private func saveAPIKey(for provider: AIProviderKind) {
+        AIKeyStore.setUserKey(apiKeyField, for: provider)
+        savedKeyConfirmation = true
+        Haptics.success()
+    }
+
+    /// Apple Watch.
+    ///
+    /// El interruptor no es decorativo: al encenderlo pide de verdad los
+    /// permisos que hacen falta (HealthKit y notificaciones), porque un
+    /// "sí" que no pide nada deja la función apagada sin decirlo. Y solo
+    /// se enseña en iPhone, no en iPad.
+    private func watchSection(_ viewModel: SettingsViewModel) -> some View {
+        Section {
+            Toggle("Tengo un Apple Watch", isOn: Bindable(viewModel).appleWatchEnabled)
+                .onChange(of: viewModel.appleWatchEnabled) { _, isOn in
+                    viewModel.savePreferences()
+                    guard isOn else { return }
+                    Task { await requestWatchPermissions() }
+                }
+
+            if viewModel.appleWatchEnabled {
+                switch watchPermissionState {
+                case .idle:
+                    EmptyView()
+                case .asking:
+                    HStack {
+                        ProgressView().controlSize(.small)
+                        Text("Pidiendo permisos…").font(.caption).foregroundStyle(.secondary)
+                    }
+                case .granted:
+                    Label("Permisos concedidos. Ya puede leer tus datos del Watch.", systemImage: "checkmark.seal.fill")
+                        .font(.caption)
+                        .foregroundStyle(Theme.Colors.nutrition)
+                case .denied:
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("Faltan permisos", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(Theme.Colors.danger)
+                        Text("Ve a Ajustes del iPhone → Salud → Acceso de apps → Habitium y actívalos. Desde aquí ya no se puede volver a preguntar: iOS solo deja pedirlo una vez.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        } header: {
+            Text("Apple Watch")
+        } footer: {
+            Text("Con el Watch, las calorías gastadas y los entrenamientos salen de tus pulsaciones y tu movimiento reales, en vez de estimarse. La IA sigue haciendo falta para reconocer la comida de una foto: son dos cosas distintas que se complementan.")
+        }
+    }
+
+    private func requestWatchPermissions() async {
+        watchPermissionState = .asking
+        let concedido = await WatchHealthAccess.requestPermissions()
+        watchPermissionState = concedido ? .granted : .denied
+        if concedido { Haptics.success() } else { Haptics.warning() }
     }
 
     private func notificationsSection(_ viewModel: SettingsViewModel) -> some View {

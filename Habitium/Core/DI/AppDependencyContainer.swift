@@ -96,11 +96,12 @@ final class AppDependencyContainer {
         return settings
     }
 
-    func updateUserSettings(aiProvider: AIProviderKind, mealReminders: Bool, eventNotifications: Bool) {
+    func updateUserSettings(aiProvider: AIProviderKind, mealReminders: Bool, eventNotifications: Bool, appleWatch: Bool) {
         let settings = currentUserSettings()
         settings.preferredAIProvider = aiProvider.rawValue
         settings.mealReminderNotificationsEnabled = mealReminders
         settings.eventNotificationsEnabled = eventNotifications
+        settings.appleWatchEnabled = appleWatch
         try? modelContext.save()
     }
 

@@ -66,6 +66,14 @@ targets:
           - $(APP_GROUP_ID)
         com.apple.developer.applesignin:
           - Default
+        # HealthKit en el iPhone (no solo en el Watch): es lo que permite
+        # leer las calorías gastadas y los entrenamientos que graba el
+        # reloj. AVISO: con una cuenta de Apple gratuita este entitlement
+        # NO se puede firmar. Si al compilar da error de firma, quita
+        # estas dos líneas y la app funciona igual, solo que sin datos
+        # del Watch.
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
     info:
       path: Habitium/Info.plist
       properties:
@@ -77,6 +85,8 @@ targets:
         NSPhotoLibraryUsageDescription: "Habitium accede a tus fotos para analizar comidas guardadas en tu galeria."
         NSUserNotificationsUsageDescription: "Habitium envia recordatorios de tus tareas, eventos y registros de comidas."
         NSFaceIDUsageDescription: "Habitium usa Face ID para bloquear el acceso a tus datos personales."
+        NSHealthShareUsageDescription: "Habitium lee tus calorias gastadas y tus entrenamientos del Apple Watch para que tus datos de nutricion sean reales y no estimados."
+        NSHealthUpdateUsageDescription: "Habitium guarda en Salud los entrenamientos que registras, para que queden en tu historial de actividad."
         OPENAI_API_KEY: $(OPENAI_API_KEY)
         ANTHROPIC_API_KEY: $(ANTHROPIC_API_KEY)
         SUPABASE_URL_SCHEME: $(SUPABASE_URL_SCHEME)
