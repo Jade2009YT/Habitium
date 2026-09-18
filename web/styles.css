@@ -1589,3 +1589,429 @@ input[type="date"] { min-height: 42px; }
     animation: none !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   CAPA DE ASPECTO — "más de lo mismo, pero x10"
+   ═══════════════════════════════════════════════════════════════════
+
+   Va al final del archivo a propósito: redefine cosas de arriba sin
+   tocarlas, así que todo lo anterior sigue funcionando y esta capa se
+   puede quitar entera si algún día no gusta.
+
+   De dónde sale: de la referencia de Notion — oscuro, portada de color
+   arriba, bandas de sección, tarjetas redondeadas y etiquetas de
+   colores. Lo que cambia respecto a esa referencia:
+
+   · **Profundidad real.** En oscuro, el truco que separa lo barato de
+     lo caro no es la sombra (no se ve), es una línea de luz de 1px en
+     el borde de arriba de cada superficie: imita cómo la luz pega en un
+     canto. Sin ella, una app oscura es una mancha plana.
+   · **La portada se mueve.** Notion pone una foto estática; aquí es un
+     degradado que gira muy despacio y que toma TU color. Pesa cero
+     bytes y no hay que descargar nada.
+   · **Números enormes.** Lo que se mira es la cifra, no la etiqueta.
+     Redondeada, apretada y con cifras de ancho fijo para que no baile.
+   · **Todo más redondo.** El radio sube de 16 a 22. Es el ajuste que
+     más cambia la sensación de "herramienta" a "app que apetece".
+
+   Comodidad, que es la otra mitad de lo pedido: nada por debajo de 44px
+   de zona de toque, contraste alto en el texto principal, y el pulgar
+   llega a todo en móvil sin estirar la mano. */
+
+:root {
+  --r: 22px;
+  --r-sm: 14px;
+  --tabbar-h: 68px;
+
+  /* Tipografía con carácter. Redondeada donde el sistema la tenga
+     (iPhone y Mac traen SF Pro Rounded), y si no, la de siempre: es
+     preferible eso a descargar una fuente que dejaría la app a medio
+     pintar cuando no hay conexión — y esta app presume de funcionar
+     sin conexión. */
+  --display: "SF Pro Rounded", ui-rounded, "Hiragino Maru Gothic ProN",
+             -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display",
+             "Segoe UI", Roboto, sans-serif;
+
+  --luz: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  --halo: 0 0 0 1px color-mix(in srgb, var(--green) 22%, transparent),
+          0 8px 30px color-mix(in srgb, var(--green) 18%, transparent);
+  --curva: cubic-bezier(0.22, 1, 0.36, 1);
+  --rebote: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* En oscuro la línea de luz es tenue: al 6 % se lee como un canto
+   iluminado; al 55 % (el valor de los fondos claros) sería un subrayado
+   blanco. */
+:root[data-bg="graphite"],
+:root[data-bg="night"] { --luz: inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-bg]),
+  :root[data-bg="system"] { --luz: inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+}
+
+/* ── Portada ────────────────────────────────────────────────────── */
+
+.topbar {
+  position: relative;
+  display: block;
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.cover {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 132px;
+  background:
+    radial-gradient(120% 160% at 15% 0%, color-mix(in srgb, var(--green) 65%, transparent), transparent 60%),
+    radial-gradient(100% 140% at 85% 20%, color-mix(in srgb, var(--purple) 45%, transparent), transparent 62%),
+    linear-gradient(120deg, color-mix(in srgb, var(--green) 30%, transparent), transparent 70%);
+  opacity: 0.85;
+}
+/* El brillo que gira. 18 s por vuelta: se nota que está vivo si te
+   quedas mirando, y no distrae si no. */
+.cover-glow {
+  position: absolute;
+  inset: -60% -20% auto -20%;
+  height: 260px;
+  background: radial-gradient(45% 55% at 50% 50%, color-mix(in srgb, var(--green) 55%, transparent), transparent 70%);
+  filter: blur(26px);
+  animation: cover-drift 18s ease-in-out infinite;
+}
+@keyframes cover-drift {
+  0%, 100% { transform: translate3d(-8%, 0, 0) scale(1); }
+  50% { transform: translate3d(12%, 14px, 0) scale(1.12); }
+}
+/* Difuminado al pie de la portada para que el color muera en el fondo
+   en vez de cortarse con una línea recta. */
+.cover::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 70px;
+  background: linear-gradient(to bottom, transparent, var(--bg));
+}
+
+.topbar-row {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: calc(max(16px, env(safe-area-inset-top)) + 46px) 18px 16px;
+}
+@media (min-width: 900px) {
+  .topbar-row { padding: 72px 32px 18px; }
+}
+
+.hero-id { display: flex; align-items: flex-end; gap: 13px; min-width: 0; }
+
+/* El emoji grande, como el icono de una página de Notion — pero sobre
+   una pastilla con la luz del canto, para que se despegue de la
+   portada en vez de flotar. */
+.hero-emoji {
+  flex: 0 0 auto;
+  width: 54px;
+  height: 54px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  font-size: 27px;
+  line-height: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--luz), 0 8px 22px rgba(0, 0, 0, 0.18);
+  animation: hero-pop 0.4s var(--rebote);
+}
+@keyframes hero-pop {
+  from { opacity: 0; transform: scale(0.7) rotate(-8deg); }
+  to { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+.topbar-title {
+  font-family: var(--display);
+  font-size: 27px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.topbar-date { font-size: 12px; font-weight: 600; letter-spacing: 0.01em; }
+@media (min-width: 900px) { .topbar-title { font-size: 31px; } }
+
+/* ── Superficies ────────────────────────────────────────────────── */
+
+.card,
+.row,
+.hero-emoji,
+.topbar-chip,
+.empty { box-shadow: var(--luz), var(--shadow-sm); }
+
+.card {
+  border-radius: var(--r);
+  padding: 20px;
+}
+.card.compact { padding: 15px 17px; }
+
+/* La tarjeta que navega se levanta y se enciende con TU color al pasar
+   por encima. El halo es lo que la hace parecer pulsable sin añadir un
+   botón que ocuparía sitio. */
+.is-link:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--green) 45%, var(--border));
+  box-shadow: var(--luz), var(--halo);
+}
+.is-link:active { transform: translateY(-1px) scale(0.995); }
+
+/* El filo de color de las tarjetas de sección: antes era un borde
+   superior plano de 3px, ahora un degradado que se apaga hacia la
+   derecha. Mismo sitio, mucho menos rígido. */
+.accent-green, .accent-blue, .accent-orange, .accent-purple, .accent-pink, .accent-red {
+  border-top: 1px solid var(--border);
+  position: relative;
+}
+.accent-green::before, .accent-blue::before, .accent-orange::before,
+.accent-purple::before, .accent-pink::before, .accent-red::before {
+  content: "";
+  position: absolute;
+  inset: -1px -1px auto -1px;
+  height: 3px;
+  border-radius: var(--r) var(--r) 0 0;
+}
+.accent-green::before { background: linear-gradient(90deg, var(--green), transparent); }
+.accent-blue::before { background: linear-gradient(90deg, var(--blue), transparent); }
+.accent-orange::before { background: linear-gradient(90deg, var(--orange), transparent); }
+.accent-purple::before { background: linear-gradient(90deg, var(--purple), transparent); }
+.accent-pink::before { background: linear-gradient(90deg, var(--pink), transparent); }
+.accent-red::before { background: linear-gradient(90deg, var(--red), transparent); }
+
+/* ── Banda de sección ───────────────────────────────────────────── */
+/* La franja de color de los apartados del Notion, pero sin caja: una
+   barra vertical de color y el texto al lado. */
+.section-title {
+  position: relative;
+  padding-left: 12px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.section-title::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 15px;
+  border-radius: 999px;
+  background: linear-gradient(to bottom, var(--green), color-mix(in srgb, var(--green) 40%, transparent));
+}
+
+/* ── Cifras ─────────────────────────────────────────────────────── */
+
+.stat, .stat-sm, .subject-mark, .row-value, .level-badge strong, .chip-level {
+  font-family: var(--display);
+  font-variant-numeric: tabular-nums;
+}
+.stat { font-size: 38px; font-weight: 800; letter-spacing: -0.035em; }
+.stat-sm { font-size: 23px; font-weight: 800; letter-spacing: -0.02em; }
+.ring-center strong { font-family: var(--display); font-size: 30px; font-weight: 800; letter-spacing: -0.03em; }
+.card h2 { font-size: 11.5px; letter-spacing: 0.07em; }
+
+/* ── Pastillas e insignias ──────────────────────────────────────── */
+
+.badge {
+  border-radius: 11px;
+  background: linear-gradient(140deg,
+    color-mix(in srgb, var(--green) 26%, transparent),
+    color-mix(in srgb, var(--green) 10%, transparent));
+  box-shadow: var(--luz);
+}
+.badge.blue { background: linear-gradient(140deg, color-mix(in srgb, var(--blue) 26%, transparent), color-mix(in srgb, var(--blue) 10%, transparent)); }
+.badge.orange { background: linear-gradient(140deg, color-mix(in srgb, var(--orange) 26%, transparent), color-mix(in srgb, var(--orange) 10%, transparent)); }
+.badge.purple { background: linear-gradient(140deg, color-mix(in srgb, var(--purple) 26%, transparent), color-mix(in srgb, var(--purple) 10%, transparent)); }
+.badge.pink { background: linear-gradient(140deg, color-mix(in srgb, var(--pink) 26%, transparent), color-mix(in srgb, var(--pink) 10%, transparent)); }
+
+.pill, .tag, .countdown { font-weight: 700; }
+
+/* ── Botones ────────────────────────────────────────────────────── */
+
+.btn { border-radius: 999px; padding: 11px 18px; min-height: 44px; }
+.btn-sm { padding: 8px 14px; min-height: 38px; font-size: 13px; }
+.btn-primary {
+  background: linear-gradient(140deg, var(--green), color-mix(in srgb, var(--green) 74%, #000));
+  box-shadow: var(--luz), 0 6px 18px color-mix(in srgb, var(--green) 32%, transparent);
+}
+.btn-primary:hover { filter: brightness(1.1) saturate(1.05); }
+
+input, select { border-radius: var(--r-sm); min-height: 46px; }
+
+/* ── Navegación ─────────────────────────────────────────────────── */
+
+.side-item { border-radius: 999px; padding: 11px 14px; font-weight: 600; }
+.side-item.is-active {
+  background: linear-gradient(100deg,
+    color-mix(in srgb, var(--green) 24%, transparent),
+    color-mix(in srgb, var(--green) 6%, transparent));
+  color: var(--green);
+}
+.side-item::before { left: 4px; }
+
+.tabbar {
+  height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  box-shadow: var(--luz);
+}
+/* Zona de toque de 44px de alto como mínimo: es la medida por debajo de
+   la cual el pulgar empieza a fallar. */
+.tab { padding: 10px 2px; min-height: 48px; border-radius: 16px; font-weight: 600; }
+.tab span { font-size: 20px; }
+.tab.is-active {
+  background: color-mix(in srgb, var(--green) 14%, transparent);
+}
+
+.topbar-chip { padding: 5px 8px 5px 5px; border-radius: 999px; }
+.chip-level { background: linear-gradient(140deg, var(--purple), color-mix(in srgb, var(--purple) 70%, #000)); }
+
+/* ── Inicio en bento ────────────────────────────────────────────── */
+/* Tarjetas de tamaños distintos en vez de una cuadrícula uniforme: la
+   rejilla toda igual se lee como una tabla, y esto se lee como un
+   panel. Solo en pantallas anchas; en móvil sigue siendo una columna,
+   que es lo cómodo con una mano. */
+@media (min-width: 900px) {
+  .grid-home { grid-template-columns: repeat(4, 1fr); }
+  .card-hero { grid-column: span 2; grid-row: span 2; }
+  .grid-home > .card:nth-child(2) { grid-column: span 2; }
+  .grid-home > .card:nth-child(3),
+  .grid-home > .card:nth-child(4),
+  .grid-home > .card:nth-child(5),
+  .grid-home > .card:nth-child(6) { grid-column: span 1; }
+}
+@media (min-width: 1280px) {
+  .grid-home { grid-template-columns: repeat(6, 1fr); }
+  .card-hero { grid-column: span 3; grid-row: span 2; }
+  .grid-home > .card:nth-child(2) { grid-column: span 3; }
+  .grid-home > .card:nth-child(n + 3) { grid-column: span 2; }
+}
+
+.level-card { border-radius: var(--r); padding: 18px 20px; }
+.level-badge { border-radius: 20px; }
+
+/* ── Asignaturas ────────────────────────────────────────────────── */
+/* La portada de color de cada asignatura, como la galería del Notion
+   pero sin necesitar una foto por asignatura. */
+.subject {
+  border-radius: 18px;
+  padding: 44px 14px 14px;
+  background: var(--surface);
+  box-shadow: var(--luz), var(--shadow-sm);
+}
+.subject::before {
+  height: 34px;
+  border-radius: 18px 18px 0 0;
+  background:
+    radial-gradient(90% 180% at 20% 0%, color-mix(in srgb, var(--subject-color, var(--green)) 85%, transparent), transparent 70%),
+    linear-gradient(110deg, var(--subject-color, var(--green)), color-mix(in srgb, var(--subject-color, var(--green)) 35%, transparent));
+}
+.subject-icon {
+  position: absolute;
+  top: 17px;
+  left: 14px;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 17px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--luz);
+}
+.subject-top { padding-left: 42px; min-height: 34px; align-items: flex-start; }
+.subject-mark { font-size: 21px; }
+
+/* ── Botón flotante en móvil ────────────────────────────────────── */
+/* El pulgar llega a la esquina de abajo sin mover la mano; el "+" de la
+   cabecera obliga a estirarse hasta arriba del todo en un móvil grande. */
+.fab {
+  position: fixed;
+  right: 16px;
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 14px);
+  z-index: 40;
+  width: 56px;
+  height: 56px;
+  border: 0;
+  border-radius: 20px;
+  font-size: 26px;
+  line-height: 1;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(140deg, var(--green), color-mix(in srgb, var(--green) 70%, #000));
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--green) 40%, transparent);
+  display: grid;
+  place-items: center;
+  transition: transform 0.18s var(--rebote), box-shadow 0.18s;
+}
+.fab:hover { transform: scale(1.06); }
+.fab:active { transform: scale(0.92); }
+@media (min-width: 900px) { .fab { display: none; } }
+
+/* ── Entrada de la pantalla ─────────────────────────────────────── */
+/* Un pelín más de recorrido que antes y con escala: se nota que la
+   pantalla ENTRA, no que se enciende. */
+.view:not([hidden]) { animation: view-in 0.34s var(--curva); }
+@keyframes view-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.995); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── Cabecera en móvil ──────────────────────────────────────────── */
+/* "Buenas tardes, Álvaro" y la píldora de nivel no caben en la misma
+   línea en un móvil de 390px: el saludo se partía en tres líneas y
+   empujaba el emoji fuera de sitio. Los controles suben a la esquina de
+   la portada —donde en Notion está el botón de compartir— y el saludo se
+   queda con el ancho entero. */
+@media (max-width: 720px) {
+  .topbar-row { flex-direction: column; align-items: stretch; gap: 0; }
+  .topbar-actions {
+    position: absolute;
+    top: max(12px, env(safe-area-inset-top));
+    right: 16px;
+  }
+  .hero-id { align-items: center; }
+  .topbar-title {
+    font-size: 23px;
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+  .hero-text { min-width: 0; }
+  .hero-emoji { width: 46px; height: 46px; font-size: 23px; border-radius: 15px; }
+  .cover { height: 116px; }
+}
+
+/* ── La tarjeta grande de Inicio ────────────────────────────────── */
+/* Ocupa dos filas del bento, así que su contenido se centra en vez de
+   quedarse arriba con medio metro de hueco debajo. */
+@media (min-width: 900px) {
+  .card-hero { display: flex; align-items: center; gap: 24px; }
+  .card-hero .hero-side { flex: 1 1 auto; min-width: 0; }
+  .card-hero .ring-wrap { flex: 0 0 auto; }
+}
+
+/* ── Casillas ───────────────────────────────────────────────────── */
+/* La regla de arriba (`input, select { min-height: 46px }`) es para
+   campos de escribir; aplicada a una casilla la convertía en un cuadro
+   gris enorme. Y `accent-color` es lo que hace que la marca salga de tu
+   color en vez del azul del navegador. */
+input[type="checkbox"],
+input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  accent-color: var(--green);
+  cursor: pointer;
+}
+input[type="color"] { min-height: 0; padding: 0; }
+
+/* El icono de la asignatura va en absoluto sobre la portada, así que el
+   nombre necesita apartarse lo que ocupa el icono MÁS su hueco: con 42px
+   se solapaban por seis píxeles. */
+.subject-top { padding-left: 50px; }

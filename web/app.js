@@ -277,8 +277,10 @@ function go(view) {
   );
   // En Inicio la barra saluda en vez de repetir "Inicio", que es lo que
   // acabas de pulsar. En el resto sí manda el nombre de la sección.
-  $("topbar-title").textContent =
-    view === "home" ? greeting() : (NAV.find((n) => n.id === view)?.label ?? "");
+  const entrada = NAV.find((n) => n.id === view);
+  $("topbar-title").textContent = view === "home" ? greeting() : (entrada?.label ?? "");
+  $("hero-emoji").textContent = entrada?.icon ?? "🏠";
+  refrescarFab();
   window.scrollTo({ top: 0 });
   render();
 }
@@ -1000,7 +1002,7 @@ function currentBackground() {
   } catch (e) {
     // Almacenamiento bloqueado (modo privado en algunos navegadores).
   }
-  return "system";
+  return "night";
 }
 
 function applyBackground(id) {
@@ -1372,6 +1374,47 @@ async function loadProgress() {
 }
 
 
+
+
+// ── Botón flotante ──────────────────────────────────────────────────
+//
+// En un móvil grande, el "+" de arriba obliga a recolocar la mano; esta
+// esquina la alcanza el pulgar sin moverse. Lo que hace cambia según la
+// pantalla: el mismo gesto, la acción que toca.
+
+const ACCION_RAPIDA = {
+  home: { destino: "nutrition", campo: "food-name", titulo: "Apuntar una comida" },
+  nutrition: { campo: "food-name", titulo: "Apuntar una comida" },
+  planner: { campo: "task-title", titulo: "Nueva tarea" },
+  finance: { campo: "tx-amount", titulo: "Apuntar un movimiento" },
+  habits: { campo: "habit-name", titulo: "Nuevo hábito" },
+  medication: { campo: "med-name", titulo: "Nuevo medicamento" },
+  study: { campo: "grade-name", titulo: "Apuntar una nota" },
+  progress: { destino: "study", campo: "grade-name", titulo: "Apuntar una nota" },
+  settings: { destino: "home", titulo: "Ir a Inicio" },
+};
+
+function refrescarFab() {
+  const accion = ACCION_RAPIDA[currentView];
+  const fab = $("fab");
+  if (!fab) return;
+  fab.title = accion?.titulo ?? "Añadir";
+  fab.setAttribute("aria-label", fab.title);
+}
+
+$("fab")?.addEventListener("click", () => {
+  const accion = ACCION_RAPIDA[currentView] ?? ACCION_RAPIDA.home;
+  if (accion.destino && accion.destino !== currentView) go(accion.destino);
+
+  // Un respiro antes de enfocar: si no, el teclado del móvil sube a la
+  // vez que la pantalla entra y se ve un salto feo.
+  setTimeout(() => {
+    const campo = accion.campo && $(accion.campo);
+    if (!campo) return;
+    campo.scrollIntoView({ behavior: "smooth", block: "center" });
+    campo.focus({ preventScroll: true });
+  }, accion.destino ? 320 : 60);
+});
 
 // ── Clave de IA ─────────────────────────────────────────────────────
 //
@@ -1887,6 +1930,12 @@ async function showApp() {
   // fusión, y la racha de verdad —siete días -- se pierde en los dos
   // sitios. La pantalla ya está pintada, así que esperar aquí no se nota.
   await store.sync();
+
+  // El nombre se vuelve a mirar AQUÍ: antes de sincronizar no existe
+  // user_settings todavía, así que la primera vez salía el trozo del
+  // correo en vez del nombre de verdad.
+  await setDisplayName(email);
+  if (currentView === "home") $("topbar-title").textContent = greeting();
 
   try {
     await player.registerDailyLogin();

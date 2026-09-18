@@ -25,11 +25,11 @@
     try {
       document.documentElement.setAttribute(
         "data-bg",
-        localStorage.getItem("habitium.bg") || "system"
+        localStorage.getItem("habitium.bg") || "night"
       );
     } catch (e) {
       // Navegador con el almacenamiento bloqueado: modo automático.
-      document.documentElement.setAttribute("data-bg", "system");
+      document.documentElement.setAttribute("data-bg", "night");
     }
   </script>
 </head>
@@ -103,10 +103,21 @@
 
   <main class="main">
     <header class="topbar">
-      <div>
-        <p class="topbar-date" id="topbar-date"></p>
-        <h1 class="topbar-title" id="topbar-title">Inicio</h1>
-      </div>
+      <!-- La portada: una franja de color viva detrás del título, como la
+           imagen de cabecera de una página de Notion. Aquí es un degradado
+           que se mueve muy despacio (18 s por vuelta) en vez de una foto:
+           pesa cero, no hay que descargarla, y cambia con el color que
+           elijas en Ajustes. -->
+      <div class="cover" aria-hidden="true"><span class="cover-glow"></span></div>
+
+      <div class="topbar-row">
+        <div class="hero-id">
+          <span class="hero-emoji" id="hero-emoji" aria-hidden="true">🏠</span>
+          <div class="hero-text">
+            <p class="topbar-date" id="topbar-date"></p>
+            <h1 class="topbar-title" id="topbar-title">Inicio</h1>
+          </div>
+        </div>
       <div class="topbar-actions">
         <!-- Nivel y racha, siempre visibles y pulsables. Llevan a
              Progreso, que en móvil no cabe en la barra de pestañas. -->
@@ -116,6 +127,7 @@
           <span class="chip-streak" id="chip-streak"><span aria-hidden="true">🔥</span><b id="chip-streak-n">0</b></span>
         </button>
         <button id="refresh" class="btn btn-ghost btn-sm" type="button" title="Actualizar">↻</button>
+      </div>
       </div>
     </header>
 
@@ -539,6 +551,10 @@
       </div>
     </section>
   </main>
+
+  <!-- Acción rápida, al alcance del pulgar. Lo que hace depende de
+       dónde estés: en Nutrición añade comida, en Estudios una nota… -->
+  <button class="fab" id="fab" type="button" title="Añadir">+</button>
 
   <nav class="tabbar" id="tabbar" role="tablist"></nav>
 </div>

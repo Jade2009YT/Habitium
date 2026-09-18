@@ -562,6 +562,53 @@ archivos de la app, así que arranca al instante y sigue funcionando sin
 conexión o con el NAS apagado. Ver `web/README.md` para ponerla en marcha
 y para publicarla en un Synology con Web Station.
 
+## El aspecto (la capa del final de `web/styles.css`)
+
+Va al final del archivo a propósito: **redefine** lo de arriba sin
+tocarlo, así que todo lo anterior sigue funcionando y la capa entera se
+puede borrar si algún día deja de gustar.
+
+De dónde sale: de una referencia de Notion — oscuro, portada de color
+arriba, bandas de sección, esquinas redondeadas, etiquetas de colores.
+Lo que se hizo distinto, y por qué:
+
+- **Profundidad de verdad.** En oscuro lo que separa lo barato de lo caro
+  no es la sombra (no se ve), es una línea de luz de 1px en el canto
+  superior de cada superficie — `--luz`. Imita cómo la luz pega en un
+  borde. Sin ella una app oscura es una mancha plana. En claro esa misma
+  variable sube al 55 %; en oscuro baja al 6 %, porque al 55 % sería un
+  subrayado blanco.
+- **La portada se mueve.** Notion pone una foto; aquí es un degradado que
+  gira en 18 segundos y que toma **tu** color. Cero bytes que descargar,
+  y cambia cuando cambias el acento.
+- **Números enormes.** Lo que se mira es la cifra, no la etiqueta:
+  redondeada, apretada (`letter-spacing: -0.035em`) y con cifras de ancho
+  fijo para que no baile al actualizarse.
+- **Radio de 16 a 22.** Es el ajuste que más cambia la sensación de
+  "herramienta" a "app que apetece abrir".
+- **Inicio en bento**: tarjetas de tamaños distintos en pantalla ancha.
+  Una rejilla toda igual se lee como una tabla. En móvil sigue siendo una
+  columna, que es lo cómodo con una mano.
+- **Oscuro por defecto**, con los seis fondos intactos por si se prefiere
+  otro.
+
+### Comodidad, que era la otra mitad de lo pedido
+
+- Nada pulsable por debajo de **44 px** de alto: es la medida por debajo
+  de la cual el pulgar empieza a fallar.
+- **Botón flotante en móvil** abajo a la derecha, donde llega el pulgar
+  sin recolocar la mano. Lo que hace cambia según la pantalla: en
+  Nutrición abre el campo de comida, en Estudios el de nota. El "+" de la
+  cabecera obliga a estirarse hasta arriba en un móvil grande.
+- **La cabecera se reorganiza en móvil**: los controles suben a la
+  esquina de la portada y el saludo se queda con el ancho entero. Sin eso
+  "Buenas tardes, Álvaro" y la píldora de nivel se peleaban y el título
+  salía en tres líneas.
+- Tipografía redondeada donde el sistema la tenga (SF Pro Rounded en
+  iPhone y Mac) y la de siempre si no. **No se descarga ninguna fuente**:
+  esta app presume de funcionar sin conexión y una fuente remota la
+  dejaría a medio pintar.
+
 ## Estudios — asignaturas, notas y asistencia
 
 El módulo que cierra la idea original del sistema de niveles: *"cada día
