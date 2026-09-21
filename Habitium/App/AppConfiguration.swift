@@ -27,13 +27,22 @@ enum AppConfiguration {
         }
     }
 
-    static var openAIAPIKey: String? {
-        nonPlaceholderValue(forInfoDictionaryKey: "OPENAI_API_KEY")
-    }
-
-    static var anthropicAPIKey: String? {
-        nonPlaceholderValue(forInfoDictionaryKey: "ANTHROPIC_API_KEY")
-    }
+    /// Las claves de IA ya NO se leen del Info.plist.
+    ///
+    /// Estaban ahí para poder compilar la app con la clave metida
+    /// dentro, y eso significaba que la clave viajaba en el paquete: se
+    /// descomprime la app, se abre Info.plist, y ahí está en texto
+    /// plano. No hace falta romper nada.
+    ///
+    /// Ahora cada usuario escribe la suya en Ajustes y se guarda en el
+    /// Llavero (ver `AIKeyStore`), cifrada por el sistema, ligada a este
+    /// dispositivo y fuera de las copias de seguridad de iCloud.
+    ///
+    /// Se devuelven nil, y no se borran, para que el resto del código
+    /// siga compilando sin cambios y AIKeyStore pueda seguir tratándolas
+    /// como "el respaldo que ya no existe".
+    static var openAIAPIKey: String? { nil }
+    static var anthropicAPIKey: String? { nil }
 
     /// Supabase project URL, reassembled from two build settings because
     /// xcconfig treats "//" as a comment marker — see Secrets.example.xcconfig.

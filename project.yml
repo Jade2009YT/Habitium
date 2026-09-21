@@ -87,8 +87,17 @@ targets:
         NSFaceIDUsageDescription: "Habitium usa Face ID para bloquear el acceso a tus datos personales."
         NSHealthShareUsageDescription: "Habitium lee tus calorias gastadas y tus entrenamientos del Apple Watch para que tus datos de nutricion sean reales y no estimados."
         NSHealthUpdateUsageDescription: "Habitium guarda en Salud los entrenamientos que registras, para que queden en tu historial de actividad."
-        OPENAI_API_KEY: $(OPENAI_API_KEY)
-        ANTHROPIC_API_KEY: $(ANTHROPIC_API_KEY)
+        # Las claves de IA YA NO van aquí.
+        #
+        # Todo lo que se mete en Info.plist viaja dentro de la app y se
+        # lee descomprimiéndola: no hay que saltarse nada, se abre el
+        # archivo y ahí está la clave en texto plano. Con una app que se
+        # instala solo en tu iPhone el riesgo es bajo, pero es una fuga
+        # gratuita y evitable.
+        #
+        # Ahora la clave se escribe en Ajustes → Análisis de comidas y se
+        # guarda en el Llavero, cifrada por el sistema y sin salir del
+        # dispositivo (ver AIKeyStore).
         SUPABASE_URL_SCHEME: $(SUPABASE_URL_SCHEME)
         SUPABASE_URL_HOST: $(SUPABASE_URL_HOST)
         SUPABASE_ANON_KEY: $(SUPABASE_ANON_KEY)

@@ -54,13 +54,16 @@ enum AIKeyStore {
         return valor
     }
 
-    static func setUserKey(_ value: String?, for provider: AIProviderKind) {
+    /// Devuelve si se guardó de verdad, para que Ajustes no diga
+    /// "Guardada ✓" sobre algo que el Llavero rechazó.
+    @discardableResult
+    static func setUserKey(_ value: String?, for provider: AIProviderKind) -> Bool {
         let limpio = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if limpio.isEmpty {
             KeychainStore.delete(forKey: keychainKey(for: provider))
-        } else {
-            KeychainStore.save(limpio, forKey: keychainKey(for: provider))
+            return true
         }
+        return KeychainStore.save(limpio, forKey: keychainKey(for: provider))
     }
 
     static func hasKey(for provider: AIProviderKind) -> Bool { key(for: provider) != nil }

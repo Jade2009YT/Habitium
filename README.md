@@ -562,6 +562,133 @@ archivos de la app, así que arranca al instante y sigue funcionando sin
 conexión o con el NAS apagado. Ver `web/README.md` para ponerla en marcha
 y para publicarla en un Synology con Web Station.
 
+## Seguridad — auditoría con ataque real
+
+No es una lista de buenas intenciones: se atacó la app de verdad. El
+guion está en el historial de esta rama y lo que hace es meter payloads
+en **todos** los campos de texto que acaban pintados (nombres de
+hábitos, comidas, asignaturas, notas, medicamentos, categorías…), abrir
+la app en Chromium con una clave de IA de mentira guardada, y medir tres
+cosas: si algo se ejecuta, si sale alguna petición a un dominio externo,
+y si la clave se puede leer.
+
+### Lo que NO se pudo romper
+
+- **XSS clásico**: cero. Todo el texto de usuario pasa por `esc()` antes
+  de llegar al HTML. Se probaron `<img onerror>`, `<svg onload>`,
+  `</span><script>` y payloads de atributo con `onmouseover`, y se
+  simularon los `mouseover` sobre cada fila. Ninguno ejecutó nada.
+- **RLS de Supabase**: las 21 tablas tienen política, todas con
+  `auth.uid() = user_id`, todas con `user_id not null` y
+  `default auth.uid()`. No hay `using (true)`, ni `to anon`, ni
+  `security definer`.
+- **Llavero de iOS**: `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` —
+  el nivel correcto, y sin copia a iCloud.
+
+### Lo que SÍ se rompió, y cómo está arreglado
+
+**1. Inyección de CSS → fuga de datos a un dominio externo** *(era
+explotable de verdad; la petición salía)*
+
+El color de una asignatura se metía en un atributo `style` pasando por
+`esc()`. Pero `esc()` escapa `< > & " '` — **no el punto y coma**. Un
+color como `#fff;background-image:url('http://malo/x')` seguía siendo
+CSS válido, y el navegador pedía esa imagen. Con CSS se puede sacar
+información fuera (selectores de atributo que solo cargan la imagen si
+un campo empieza por cierta letra), así que no era cosmético.
+
+Arreglo: a un atributo `style` **no se le escapa, se le valida**.
+`colorSeguro()` solo deja pasar `#rrggbb`; cualquier otra cosa cae al
+color por defecto.
+
+**2. Sin Content-Security-Policy**
+
+Nada limitaba lo que la página podía cargar o a dónde podía conectarse.
+Ahora hay una CSP en el `<head>`, y **sin `'unsafe-inline'` para
+scripts**, que es la mitad que importa: un `<script>` inyectado no se
+ejecuta aunque llegue al HTML. El único script en línea que había (el
+que aplica el fondo antes de pintar) se sacó a `theme-boot.js` para
+poder prohibirlos del todo.
+
+`img-src 'self'` es lo que habría bloqueado la fuga del punto 1 aunque
+la inyección siguiera ahí. Verificado: tras el arreglo, la petición al
+dominio externo ya no aparece.
+
+`style-src` sí lleva `'unsafe-inline'`, porque la app pone estilos en
+línea por todas partes. Es una concesión consciente y por eso los
+colores se validan con lista blanca en vez de confiar en la política.
+
+**3. Dependencia del CDN sin anclar**
+
+`@supabase/supabase-js@2` es un **rango**: el CDN sirve la última 2.x
+que haya en cada momento. El día que alguien publique una versión con
+código malicioso —o le roben la cuenta a quien publica— ese código se
+ejecuta aquí con acceso a la sesión y a `localStorage`, sin que nadie
+toque este repositorio. Ahora está anclado a `2.58.0`.
+
+Lo ideal es no depender del CDN. En tu Mac:
+
+```bash
+mkdir -p web/vendor
+curl -o web/vendor/supabase.js \
+  "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/+esm"
+# y cambia el import de app.js por "./vendor/supabase.js"
+```
+
+Desde el entorno donde se escribió esto el proxy bloquea la descarga.
+
+**4. Las claves de IA viajaban dentro de la app**
+
+Estaban en `Info.plist` vía `Secrets.xcconfig`. Todo lo que hay en
+`Info.plist` se lee **descomprimiendo la app**: no hay que saltarse
+nada, se abre el archivo y ahí está en texto plano. Se han quitado; la
+clave se escribe en Ajustes y vive en el Llavero (`AIKeyStore`).
+
+**5. Contraseña de 6 caracteres**
+
+Subida a 10, con rechazo de las más usadas y de las que contienen tu
+propio correo. **Sin** reglas de "una mayúscula y un símbolo": esas
+empujan a poner `Contraseña1!`, que es de las primeras que prueba
+cualquier ataque, mientras que la longitud sí multiplica el tiempo que
+cuesta romperla.
+
+**6. El Llavero fallaba en silencio**
+
+Se ignoraba el resultado de `SecItemAdd`, así que la app decía
+"Guardada ✓" sobre una clave que podía no existir. Ahora devuelve si se
+guardó y Ajustes lo dice si falla.
+
+**7. Sesión eterna en dispositivo compartido**
+
+En el iPad del colegio la sesión vivía en `localStorage`: sobrevive a
+cerrar la pestaña, al navegador y al reinicio. Quien lo cogiera después
+entraba en tu cuenta sin saber tu contraseña. Ahora el login tiene
+**"Este no es mi dispositivo"**: la sesión —y la clave de IA— van a
+`sessionStorage` y mueren al cerrar la pestaña. Nadie se acuerda de
+darle a "cerrar sesión" cuando suena el timbre.
+
+Además, cerrar sesión ahora borra también la clave de IA: si se quedara,
+la siguiente persona que entrase con SU cuenta seguiría gastando la de
+quien la dejó puesta.
+
+### Lo que sigue siendo un riesgo aceptado, y por qué
+
+- **La clave de IA se puede leer desde el navegador.** Quien tenga tu
+  equipo desbloqueado la ve desde las herramientas de desarrollo. No
+  tiene arreglo sin un servidor propio que haga de intermediario, que es
+  un proyecto aparte. La pantalla lo dice en vez de disimularlo, y en
+  dispositivo compartido la clave ya no sobrevive al cierre.
+- **La clave pública de Supabase es pública.** Es su diseño: lo que
+  protege los datos es RLS, no que esa clave sea secreta.
+- **`style-src 'unsafe-inline'`**: ver punto 2.
+
+### Cabeceras para el Synology
+
+Tres protecciones solo funcionan como cabecera HTTP, no en el HTML:
+antiframe (clickjacking), HSTS y `nosniff`. Están en
+**`web/seguridad-cabeceras.conf`** con las instrucciones de dónde
+pegarlas en DSM.
+
 ## El aspecto (la capa del final de `web/styles.css`)
 
 Va al final del archivo a propósito: **redefine** lo de arriba sin

@@ -23,7 +23,8 @@ import Security
 enum KeychainStore {
     private static let service = "com.habitium.app.auth"
 
-    static func save(_ value: String, forKey key: String) {
+    @discardableResult
+    static func save(_ value: String, forKey key: String) -> Bool {
         saveData(Data(value.utf8), forKey: key)
     }
 
@@ -32,14 +33,23 @@ enum KeychainStore {
         return String(data: data, encoding: .utf8)
     }
 
-    static func saveData(_ data: Data, forKey key: String) {
+    /// Devuelve si de verdad se guardó.
+    ///
+    /// Antes se ignoraba el resultado de `SecItemAdd`. Un fallo del
+    /// Llavero es raro pero pasa (el dispositivo bloqueado en mitad de la
+    /// escritura, por ejemplo), y al ignorarlo la app decía "Guardada ✓"
+    /// sobre una clave que no existía: el usuario se queda convencido de
+    /// que su clave está puesta y el análisis de comidas no funciona sin
+    /// que nadie entienda por qué.
+    @discardableResult
+    static func saveData(_ data: Data, forKey key: String) -> Bool {
         let query = baseQuery(forKey: key)
         SecItemDelete(query as CFDictionary)
 
         var attributes = query
         attributes[kSecValueData as String] = data
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        SecItemAdd(attributes as CFDictionary, nil)
+        return SecItemAdd(attributes as CFDictionary, nil) == errSecSuccess
     }
 
     static func readData(forKey key: String) -> Data? {

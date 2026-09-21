@@ -11,7 +11,23 @@
 // al momento (optimista) sin esperar al servidor. store.onChange() se
 // encarga de volver a pintar cuando llega algo nuevo de la nube.
 
-import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+// Versión EXACTA, no "@2".
+//
+// Con "@2" el CDN sirve la última 2.x que haya en cada momento: el día
+// que alguien publique una versión con código malicioso —o le roben la
+// cuenta a quien publica— ese código se ejecuta en esta página con
+// acceso completo a la sesión y a lo que haya en localStorage, sin que
+// nadie toque este repositorio. Anclar la versión no elimina el riesgo,
+// pero lo congela en algo que se puede revisar.
+//
+// Lo ideal es no depender del CDN en absoluto. Para hacerlo, en tu Mac:
+//
+//   curl -o web/vendor/supabase.js \
+//     "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/+esm"
+//
+// y cambiar este import por "./vendor/supabase.js". Desde aquí no se
+// puede: el proxy de este entorno bloquea la descarga.
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/+esm";
 import * as store from "./store.js";
 import * as player from "./player.js";
 import * as prog from "./progression.js";
@@ -34,7 +50,34 @@ if (!isConfigured) {
   throw new Error("Habitium: falta web/config.js o sigue con los valores de ejemplo.");
 }
 
-const supabase = createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+/** ¿Se marcó "este no es mi dispositivo" la última vez?
+ *
+ *  Tiene que leerse ANTES de crear el cliente, porque de ello depende
+ *  dónde se guarda la sesión, y eso no se puede cambiar después. */
+const dispositivoAjeno = (() => {
+  try { return sessionStorage.getItem("habitium.shared") === "1"; } catch (e) { return false; }
+})();
+
+// En un dispositivo compartido —el iPad del colegio, el portátil de un
+// amigo— la sesión va a sessionStorage en vez de a localStorage.
+//
+// La diferencia es todo: localStorage sobrevive a cerrar la pestaña, al
+// reinicio del navegador y al del aparato, así que quien lo coja después
+// abre la app y está DENTRO de tu cuenta sin saber tu contraseña.
+// sessionStorage muere al cerrar la pestaña. Nadie se acuerda de darle a
+// "cerrar sesión" cuando suena el timbre.
+const supabase = createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, {
+  auth: {
+    storage: dispositivoAjeno ? window.sessionStorage : window.localStorage,
+    persistSession: true,
+    autoRefreshToken: true,
+    // El token no viaja en la URL: si llegara ahí acabaría en el
+    // historial del navegador y en los registros de cualquier servidor
+    // por el que pase el enlace.
+    detectSessionInUrl: true,
+    flowType: "pkce",
+  },
+});
 
 store.configure(supabase, async () => (await supabase.auth.getUser()).data?.user?.id ?? null);
 
@@ -172,11 +215,54 @@ function setAuthMessage(text, ok = false) {
 $("tab-signin").addEventListener("click", () => setAuthMode("signin"));
 $("tab-signup").addEventListener("click", () => setAuthMode("signup"));
 
+/** Las cien contraseñas que más se usan bastan para reventar una cuenta
+ *  con un ataque automático. Aquí va una muestra corta con las que salen
+ *  siempre en español y en inglés — no es una lista completa, es una red
+ *  para que nadie use LA obvia. */
+const CONTRASENAS_MALAS = new Set([
+  "contrasena1", "contraseña1", "1234567890", "0123456789", "qwertyuiop",
+  "password12", "password123", "iloveyou12", "administrador", "habitium123",
+  "12345678910", "1234512345", "aaaaaaaaaa", "abcdefghij",
+]);
+
+/** Devuelve un motivo si la contraseña no vale, o null si está bien.
+ *
+ *  Diez caracteres y nada de reglas de "una mayúscula y un símbolo":
+ *  esas reglas empujan a la gente a poner "Contraseña1!" —que es de las
+ *  primeras que prueba cualquier ataque— mientras que la longitud sí
+ *  multiplica de verdad el tiempo que cuesta romperla. */
+function problemaContrasena(password, email) {
+  if (password.length < 10) return "La contraseña necesita al menos 10 caracteres.";
+  if (CONTRASENAS_MALAS.has(password.toLowerCase())) {
+    return "Esa contraseña está entre las más usadas del mundo. Pon otra.";
+  }
+  const usuario = String(email).split("@")[0].toLowerCase();
+  if (usuario.length >= 4 && password.toLowerCase().includes(usuario)) {
+    return "No uses tu correo dentro de la contraseña.";
+  }
+  if (/^(.)\1+$/.test(password)) return "Repetir la misma letra no es una contraseña.";
+  return null;
+}
+
 $("auth-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const email = $("auth-email").value.trim();
   const password = $("auth-password").value;
   const submit = $("auth-submit");
+
+  // Solo al crear la cuenta: a quien ya tiene una con la contraseña
+  // antigua no se le puede dejar fuera de su propia app.
+  if (authMode === "signup") {
+    const problema = problemaContrasena(password, email);
+    if (problema) return setAuthMessage(problema);
+  }
+
+  // Se recuerda la elección ANTES de entrar: al recargar, el cliente ya
+  // sabe dónde tiene que buscar la sesión.
+  try {
+    if ($("auth-shared").checked) sessionStorage.setItem("habitium.shared", "1");
+    else sessionStorage.removeItem("habitium.shared");
+  } catch (err) {}
 
   submit.disabled = true;
   setAuthMessage("");
@@ -210,6 +296,15 @@ async function doSignOut() {
   // Se borra lo local: en un dispositivo compartido (el iPad del cole)
   // los datos de una cuenta no deben quedar accesibles a la siguiente.
   await store.wipe();
+
+  // Y la clave de IA. Si se quedara, la siguiente persona que entrara
+  // con SU cuenta seguiría gastando la de quien la dejó puesta — y la
+  // factura le llegaría al primero.
+  for (const proveedor of ["openai", "anthropic"]) {
+    try { localStorage.removeItem(`${AI_KEY}.${proveedor}`); } catch (e) {}
+    try { sessionStorage.removeItem(`${AI_KEY}.${proveedor}`); } catch (e) {}
+  }
+
   await supabase.auth.signOut();
 }
 $("sign-out").addEventListener("click", doSignOut);
@@ -1085,6 +1180,23 @@ function showSaved(form) {
  *  saldría XP duplicado, sin ningún error que lo delatara. */
 const idKey = (id) => String(id ?? "").toUpperCase();
 
+/** Deja pasar SOLO un color hexadecimal de seis dígitos.
+ *
+ *  Escapar no basta cuando el destino es un atributo `style`: `esc()`
+ *  neutraliza comillas y ángulos, pero no el punto y coma, así que un
+ *  valor como `#fff;background-image:url('http://malo/x')` seguía siendo
+ *  CSS válido y el navegador pedía esa imagen. Se comprobó atacando la
+ *  app de verdad: la petición al dominio externo salía.
+ *
+ *  Con CSS se puede sacar información fuera (por ejemplo, con selectores
+ *  de atributo que solo piden la imagen si un campo empieza por cierta
+ *  letra), así que esto no es cosmético.
+ *
+ *  La regla: a un atributo `style` no se le escapa nada, se le valida
+ *  contra una lista blanca. Si no encaja, color por defecto. */
+const colorSeguro = (valor, porDefecto = "#2563eb") =>
+  /^#[0-9a-fA-F]{6}$/.test(String(valor ?? "").trim()) ? String(valor).trim() : porDefecto;
+
 /** Concede experiencia y lo celebra en pantalla. Todo lo que da puntos
  *  pasa por aquí. */
 async function awardXP(source, key, date = new Date()) {
@@ -1215,7 +1327,8 @@ function currentAccent() {
 
 function applyAccent(valor) {
   const root = document.documentElement;
-  const esHex = /^#[0-9a-f]{6}$/i.test(valor);
+  // Misma regla que con las asignaturas: lista blanca, no escapado.
+  const esHex = /^#[0-9a-fA-F]{6}$/.test(String(valor ?? "").trim());
 
   if (esHex) {
     // Color a medida: se pisa la variable directamente. El tono suave se
@@ -1439,8 +1552,17 @@ const AI_HELP = {
 const aiProvider = () => {
   try { return localStorage.getItem(AI_PROVIDER_KEY) || "openai"; } catch (e) { return "openai"; }
 };
+/** Dónde guardar la clave de IA.
+ *
+ *  En un dispositivo compartido va a sessionStorage y muere al cerrar la
+ *  pestaña. En el tuyo, a localStorage, para no tener que pegarla cada
+ *  vez. Es la misma regla que para la sesión y por el mismo motivo: en
+ *  el iPad del colegio, lo que sobrevive al cierre lo hereda el
+ *  siguiente que se siente. */
+const almacenClave = () => (dispositivoAjeno ? sessionStorage : localStorage);
+
 const aiKeyFor = (proveedor) => {
-  try { return localStorage.getItem(`${AI_KEY}.${proveedor}`) || ""; } catch (e) { return ""; }
+  try { return almacenClave().getItem(`${AI_KEY}.${proveedor}`) || ""; } catch (e) { return ""; }
 };
 
 /** Solo el principio y el final: lo justo para reconocer cuál pusiste. */
@@ -1458,7 +1580,9 @@ function renderAIKey() {
   $("ai-key").placeholder = clave ? enmascarar(clave) : proveedor === "openai" ? "sk-…" : "sk-ant-…";
   $("ai-help").href = AI_HELP[proveedor];
   $("ai-status").textContent = clave
-    ? "Clave guardada en este navegador. El análisis por foto está listo."
+    ? dispositivoAjeno
+      ? "Clave guardada solo hasta que cierres la pestaña (marcaste dispositivo compartido)."
+      : "Clave guardada en este navegador. Cualquiera que use este equipo desbloqueado puede leerla desde las herramientas de desarrollo — es el precio de no tener servidor propio."
     : "Sin clave: puedes apuntar las comidas a mano igual, pero no reconocerlas por foto.";
 }
 
@@ -1470,13 +1594,13 @@ $("ai-provider")?.addEventListener("change", (e) => {
 $("ai-save")?.addEventListener("click", () => {
   const clave = $("ai-key").value.trim();
   if (!clave) return;
-  try { localStorage.setItem(`${AI_KEY}.${aiProvider()}`, clave); } catch (e) {}
+  try { almacenClave().setItem(`${AI_KEY}.${aiProvider()}`, clave); } catch (e) {}
   renderAIKey();
   $("ai-status").textContent = "Guardada ✓";
 });
 
 $("ai-clear")?.addEventListener("click", () => {
-  try { localStorage.removeItem(`${AI_KEY}.${aiProvider()}`); } catch (e) {}
+  try { almacenClave().removeItem(`${AI_KEY}.${aiProvider()}`); } catch (e) {}
   renderAIKey();
 });
 
@@ -1566,7 +1690,7 @@ function renderSubjects(subjects, grades) {
       const estado = study.subjectStatus(s, suyas);
       const cubierto = Math.round(study.weightCovered(suyas) * 100);
       return `<button class="subject ${s.id === subjectAbierta ? "is-active" : ""}" type="button"
-                      data-subject="${s.id}" style="--subject-color:${esc(s.color || "#2563eb")}">
+                      data-subject="${s.id}" style="--subject-color:${colorSeguro(s.color)}">
                 <span class="subject-top">
                   <span class="subject-icon" aria-hidden="true">${s.icon || "📘"}</span>
                   <span class="subject-name">${esc(s.name)}</span>

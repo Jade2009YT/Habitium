@@ -14,24 +14,54 @@
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="icon" href="icon.png">
 
+  <!-- ═══ Content-Security-Policy ═══════════════════════════════════
+       La red de seguridad: aunque mañana se cuele una inyección, esto
+       limita lo que puede hacer.
+
+       Se puso después de atacar la app de verdad: una inyección de CSS
+       en el color de una asignatura conseguía que el navegador pidiera
+       una imagen a un dominio de fuera. Esa petición, con esta política,
+       ya no sale — `img-src` solo permite el propio sitio.
+
+       Qué permite cada cosa y por qué:
+       · script-src: solo este sitio y el CDN de Supabase. SIN
+         'unsafe-inline', que es la mitad que de verdad importa: sin eso,
+         un <script> inyectado no se ejecuta aunque llegue al HTML.
+       · style-src: incluye 'unsafe-inline' porque la app pone estilos en
+         línea por todas partes (anchos de barra, colores de fila). Es
+         una concesión consciente, y por eso los colores se validan con
+         lista blanca en vez de confiar en la política.
+       · connect-src: Supabase y las dos APIs de IA. Nada más: si algo
+         intenta mandar tus datos a otro sitio, el navegador lo corta.
+       · object-src/base-uri/form-action: cerrados. Son tres vectores
+         clásicos que no se usan aquí para nada.
+
+       NOTA: `frame-ancestors` no funciona en una etiqueta meta, solo
+       como cabecera HTTP. Está en web/seguridad-cabeceras.conf, que es
+       lo que hay que poner en el Synology. -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' https://cdn.jsdelivr.net;
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' data: blob:;
+    font-src 'self';
+    connect-src 'self' https://*.supabase.co https://api.openai.com https://api.anthropic.com;
+    worker-src 'self';
+    manifest-src 'self';
+    object-src 'none';
+    base-uri 'none';
+    form-action 'none';
+    upgrade-insecure-requests">
+
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+
   <link rel="stylesheet" href="styles.css">
 
-  <!-- Aplica el fondo guardado ANTES de que se pinte nada. Tiene que
-       ir aquí y no en app.js: app.js es un módulo y se ejecuta después
-       del primer pintado, así que quien tuviera "Noche" vería medio
-       segundo de blanco en cada carga. Es el único script en línea de
-       la página, y es por esto. -->
-  <script>
-    try {
-      document.documentElement.setAttribute(
-        "data-bg",
-        localStorage.getItem("habitium.bg") || "night"
-      );
-    } catch (e) {
-      // Navegador con el almacenamiento bloqueado: modo automático.
-      document.documentElement.setAttribute("data-bg", "night");
-    }
-  </script>
+  <!-- El fondo guardado se aplica ANTES de pintar nada. Está en su
+       propio archivo y no en línea para que la política de seguridad
+       pueda prohibir los scripts en línea por completo: esa prohibición
+       es lo que impide que un <script> inyectado llegue a ejecutarse. -->
+  <script src="theme-boot.js"></script>
 </head>
 <body>
 
@@ -61,8 +91,13 @@
       </label>
       <label class="field">
         <span>Contraseña</span>
-        <input id="auth-password" type="password" required autocomplete="current-password" minlength="6" placeholder="Mínimo 6 caracteres">
+        <input id="auth-password" type="password" required autocomplete="current-password" minlength="10" placeholder="Mínimo 10 caracteres">
       </label>
+      <label class="shared-check">
+        <input type="checkbox" id="auth-shared">
+        <span>Este no es mi dispositivo <small>La sesión se cierra sola al cerrar la pestaña.</small></span>
+      </label>
+
       <button id="auth-submit" class="btn btn-primary btn-lg btn-block" type="submit">Iniciar sesión</button>
     </form>
 

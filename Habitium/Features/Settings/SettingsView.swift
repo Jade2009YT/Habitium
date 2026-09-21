@@ -20,6 +20,7 @@ struct SettingsView: View {
     @State private var selectedAccent: AccentTheme = AccentThemeStore.current
     @State private var apiKeyField: String = ""
     @State private var savedKeyConfirmation = false
+    @State private var keychainFailed = false
     @State private var watchPermissionState: WatchPermissionState = .idle
 
     enum WatchPermissionState { case idle, asking, granted, denied }
@@ -307,6 +308,12 @@ struct SettingsView: View {
                 }
             }
 
+            if keychainFailed {
+                Label("El Llavero rechazó guardarla. Desbloquea el iPhone e inténtalo otra vez.", systemImage: "xmark.octagon.fill")
+                    .font(.caption)
+                    .foregroundStyle(Theme.Colors.danger)
+            }
+
             if let url = AIKeyStore.helpURL(for: provider) {
                 Link("¿De dónde saco la clave?", destination: url)
                     .font(.caption)
@@ -319,9 +326,10 @@ struct SettingsView: View {
     }
 
     private func saveAPIKey(for provider: AIProviderKind) {
-        AIKeyStore.setUserKey(apiKeyField, for: provider)
-        savedKeyConfirmation = true
-        Haptics.success()
+        let guardada = AIKeyStore.setUserKey(apiKeyField, for: provider)
+        savedKeyConfirmation = guardada
+        keychainFailed = !guardada
+        if guardada { Haptics.success() } else { Haptics.warning() }
     }
 
     /// Apple Watch.

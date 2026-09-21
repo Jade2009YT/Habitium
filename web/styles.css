@@ -2015,3 +2015,16 @@ input[type="color"] { min-height: 0; padding: 0; }
    nombre necesita apartarse lo que ocupa el icono MÁS su hueco: con 42px
    se solapaban por seis píxeles. */
 .subject-top { padding-left: 50px; }
+
+/* Aviso de dispositivo compartido, en el login. */
+.shared-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 2px 0 16px;
+  font-size: 13.5px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.shared-check input { flex: 0 0 auto; margin-top: 2px; }
+.shared-check small { display: block; font-size: 12px; color: var(--text-3); }

@@ -21,13 +21,14 @@
 // Al cambiar los archivos de la app, sube también este archivo con
 // CACHE_VERSION incrementado — así se limpian las cachés antiguas.
 
-const CACHE_VERSION = "habitium-v4";
+const CACHE_VERSION = "habitium-v5";
 
 const SHELL = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
+  "./theme-boot.js",
   "./store.js",
   // Los módulos que app.js importa: sin ellos en la caché, la app abre
   // sin conexión pero se queda a medias al no poder resolver el import.
