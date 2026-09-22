@@ -2533,3 +2533,40 @@ input[type="color"] { min-height: 0; padding: 0; }
   .cat-track { grid-column: 1 / -1; }
   .goal-now { font-size: 26px; }
 }
+
+/* ═══ ARREGLOS DE MÓVIL ══════════════════════════════════════════════
+   Salidos de mirar las capturas a 390px, que es el ancho donde de
+   verdad se usa esto. */
+
+/* `.grid-3` era `repeat(3, 1fr)` fijo. Y `1fr` es `minmax(auto, 1fr)`:
+   el "auto" hace que la columna no baje del ancho de su contenido, así
+   que en un móvil las tres tarjetas de Ingresos/Gastos/Disponible
+   sumaban más que la pantalla y la tercera se salía por la derecha.
+   `minmax(0, 1fr)` deja que se encojan de verdad. */
+.grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+@media (max-width: 560px) {
+  /* Y aun encogiéndose, tres importes con dos decimales no caben a ese
+     tamaño de letra. */
+  .grid-3 { gap: 8px; }
+  .grid-3 .card { padding: 12px 10px; }
+  .grid-3 .card h2 { font-size: 10px; letter-spacing: 0.03em; }
+  .grid-3 .stat-sm { font-size: 17px; }
+
+  /* El mes cabía en una línea sin el ancho mínimo, que estaba puesto
+     para que los botones de ‹ › no bailaran al cambiar de mes. En móvil
+     pesa más que quepa. */
+  #cal-title { min-width: 0; font-size: 16px; }
+}
+
+/* Los hijos de una vista son grid items, y un grid item tiene
+   `min-width: auto`: no puede encogerse por debajo del ancho mínimo de
+   su contenido. La tabla de notas tiene `min-width: 430px`, así que en
+   un móvil de 390 empujaba su tarjeta a 472 — y con ella la vista, la
+   columna principal y el documento entero, que se iba en scroll
+   horizontal.
+   El `overflow-x: auto` de `.table-wrap` no servía de nada mientras el
+   contenedor no pudiera encogerse. Con esto, la tabla hace scroll dentro
+   de su tarjeta, que es lo que se quería desde el principio. */
+.view > * { min-width: 0; }
+.table-wrap { min-width: 0; }

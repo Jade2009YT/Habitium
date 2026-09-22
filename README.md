@@ -1147,6 +1147,30 @@ empieza en **lunes**. `getDay()` devuelve domingo = 0, así que el
 desplazamiento es `(primerDia.getDay() + 6) % 7`. Sin eso, el calendario
 sale corrido un día.
 
+### El móvil, que es donde se usa esto
+
+Todas las pantallas nuevas se habían mirado a 1180 px. A 390 px —que es
+un iPhone— salieron dos cosas:
+
+- **La tarjeta de "Disponible" se salía por la derecha.** `.grid-3` era
+  `repeat(3, 1fr)`, y `1fr` es `minmax(auto, 1fr)`: ese *auto* impide
+  que la columna baje del ancho de su contenido, así que las tres
+  tarjetas sumaban más que la pantalla. Con `minmax(0, 1fr)` se encogen
+  de verdad.
+- **Estudios hacía scroll horizontal de la página entera.** La tabla de
+  notas tiene `min-width: 430px` y su contenedor `overflow-x: auto` —
+  correcto sobre el papel. Pero los hijos de `.view` son grid items, y
+  un grid item tiene `min-width: auto`: no puede encogerse por debajo
+  de su contenido. Así que la tabla empujaba su tarjeta a 472 px, y con
+  ella la vista, la columna y el documento. El `overflow-x` no servía
+  de nada mientras el contenedor no pudiera encogerse.
+
+Ese segundo venía de antes de esta tanda. Queda una comprobación que lo
+caza sola (`medir-desborde.mjs` en el scratchpad): recorre las diez
+pantallas a 390 px y avisa de cualquier elemento que se salga —
+ignorando, eso sí, lo que se sale *dentro de un contenedor con scroll
+propio*, que es justo lo que hace una tabla ancha bien resuelta.
+
 ## Un fallo de CSS que se llevó por delante tres pantallas
 
 Todo el CSS nuevo de esta tanda usaba el atajo `font`:
