@@ -387,3 +387,62 @@ struct UserSettingsDTO: Codable, Sendable {
         case updatedAt = "updated_at"
     }
 }
+
+// MARK: - Rutinas encadenadas
+
+struct RoutineDTO: Codable, Sendable {
+    var id: UUID
+    var name: String
+    var icon: String
+    var startMinutes: Int
+    var daysOfWeek: [Int]
+    var isActive: Bool
+    var notificationsEnabled: Bool
+    var sortOrder: Int
+    var createdAt: Date
+    var updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, icon
+        case startMinutes = "start_minutes"
+        case daysOfWeek = "days_of_week"
+        case isActive = "is_active"
+        case notificationsEnabled = "notifications_enabled"
+        case sortOrder = "sort_order"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+struct RoutineStepDTO: Codable, Sendable {
+    var id: UUID
+    var routineID: UUID
+    var title: String
+    var icon: String
+    var durationMinutes: Int
+    var sortOrder: Int
+    var updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, icon
+        case routineID = "routine_id"
+        case durationMinutes = "duration_minutes"
+        case sortOrder = "sort_order"
+        case updatedAt = "updated_at"
+    }
+}
+
+struct RoutineLogDTO: Codable, Sendable {
+    var id: UUID
+    var routineID: UUID
+    var stepID: UUID
+    var date: Date
+    var updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, date
+        case routineID = "routine_id"
+        case stepID = "step_id"
+        case updatedAt = "updated_at"
+    }
+}

@@ -88,6 +88,14 @@ final class CloudSyncService {
 
         await syncUserSettings(client: client, context: context)
 
+        // Rutinas: primero la rutina, después sus pasos y sus marcas. El
+        // orden importa porque en Postgres los pasos apuntan a la rutina
+        // con una clave foránea — subirlos antes daría error de
+        // integridad y se perderían hasta el siguiente sync.
+        await syncRoutines(client: client, context: context)
+        await syncRoutineSteps(client: client, context: context)
+        await syncRoutineLogs(client: client, context: context)
+
         lastSyncedAt = .now
     }
 
@@ -836,6 +844,142 @@ final class CloudSyncService {
             }
         )
         try? context.save()
+    }
+
+
+    // MARK: - Rutinas encadenadas
+
+    private func syncRoutines(client: SupabaseClient, context: ModelContext) async {
+        await reconcile(
+            table: "routines",
+            client: client,
+            context: context,
+            fetchLocal: { (try? context.fetch(FetchDescriptor<Routine>())) ?? [] },
+            localID: { $0.id },
+            localUpdatedAt: { $0.updatedAt },
+            dtoID: { $0.id },
+            dtoUpdatedAt: { $0.updatedAt },
+            makeLocal: { dto in
+                Routine(
+                    id: dto.id,
+                    name: dto.name,
+                    icon: dto.icon,
+                    startMinutes: dto.startMinutes,
+                    daysOfWeek: dto.daysOfWeek,
+                    isActive: dto.isActive,
+                    notificationsEnabled: dto.notificationsEnabled,
+                    sortOrder: dto.sortOrder,
+                    createdAt: dto.createdAt,
+                    updatedAt: dto.updatedAt
+                )
+            },
+            applyRemote: { dto, local in
+                local.name = dto.name
+                local.icon = dto.icon
+                local.startMinutes = dto.startMinutes
+                local.daysOfWeek = dto.daysOfWeek
+                local.isActive = dto.isActive
+                local.notificationsEnabled = dto.notificationsEnabled
+                local.sortOrder = dto.sortOrder
+                local.updatedAt = dto.updatedAt
+                // notificationIdentifiers NO se toca a propósito: es de
+                // este dispositivo y no viaja (regla 5 de schema.sql).
+            },
+            toDTO: { routine in
+                RoutineDTO(
+                    id: routine.id,
+                    name: routine.name,
+                    icon: routine.icon,
+                    startMinutes: routine.startMinutes,
+                    daysOfWeek: routine.daysOfWeek,
+                    isActive: routine.isActive,
+                    notificationsEnabled: routine.notificationsEnabled,
+                    sortOrder: routine.sortOrder,
+                    createdAt: routine.createdAt,
+                    updatedAt: routine.updatedAt
+                )
+            }
+        )
+    }
+
+    private func syncRoutineSteps(client: SupabaseClient, context: ModelContext) async {
+        await reconcile(
+            table: "routine_steps",
+            client: client,
+            context: context,
+            fetchLocal: { (try? context.fetch(FetchDescriptor<RoutineStep>())) ?? [] },
+            localID: { $0.id },
+            localUpdatedAt: { $0.updatedAt },
+            dtoID: { $0.id },
+            dtoUpdatedAt: { $0.updatedAt },
+            makeLocal: { dto in
+                RoutineStep(
+                    id: dto.id,
+                    routineID: dto.routineID,
+                    title: dto.title,
+                    icon: dto.icon,
+                    durationMinutes: dto.durationMinutes,
+                    sortOrder: dto.sortOrder,
+                    updatedAt: dto.updatedAt
+                )
+            },
+            applyRemote: { dto, local in
+                local.routineID = dto.routineID
+                local.title = dto.title
+                local.icon = dto.icon
+                local.durationMinutes = dto.durationMinutes
+                local.sortOrder = dto.sortOrder
+                local.updatedAt = dto.updatedAt
+            },
+            toDTO: { step in
+                RoutineStepDTO(
+                    id: step.id,
+                    routineID: step.routineID,
+                    title: step.title,
+                    icon: step.icon,
+                    durationMinutes: step.durationMinutes,
+                    sortOrder: step.sortOrder,
+                    updatedAt: step.updatedAt
+                )
+            }
+        )
+    }
+
+    private func syncRoutineLogs(client: SupabaseClient, context: ModelContext) async {
+        await reconcile(
+            table: "routine_logs",
+            client: client,
+            context: context,
+            fetchLocal: { (try? context.fetch(FetchDescriptor<RoutineLog>())) ?? [] },
+            localID: { $0.id },
+            localUpdatedAt: { $0.updatedAt },
+            dtoID: { $0.id },
+            dtoUpdatedAt: { $0.updatedAt },
+            makeLocal: { dto in
+                RoutineLog(
+                    id: dto.id,
+                    routineID: dto.routineID,
+                    stepID: dto.stepID,
+                    date: dto.date,
+                    updatedAt: dto.updatedAt
+                )
+            },
+            applyRemote: { dto, local in
+                local.routineID = dto.routineID
+                local.stepID = dto.stepID
+                local.date = dto.date
+                local.updatedAt = dto.updatedAt
+            },
+            toDTO: { log in
+                RoutineLogDTO(
+                    id: log.id,
+                    routineID: log.routineID,
+                    stepID: log.stepID,
+                    date: log.date,
+                    updatedAt: log.updatedAt
+                )
+            }
+        )
     }
 
     private func syncUserSettings(client: SupabaseClient, context: ModelContext) async {

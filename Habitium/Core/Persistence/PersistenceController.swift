@@ -54,7 +54,10 @@ final class PersistenceController {
             WorkoutSet.self,
             PendingCloudDeletion.self,
             PlayerProfile.self,
-            XPEvent.self
+            XPEvent.self,
+            Routine.self,
+            RoutineStep.self,
+            RoutineLog.self
         ])
 
         let configuration: ModelConfiguration
@@ -129,7 +132,10 @@ final class PersistenceController {
             WorkoutSet.self,
             PendingCloudDeletion.self,
             PlayerProfile.self,
-            XPEvent.self
+            XPEvent.self,
+            Routine.self,
+            RoutineStep.self,
+            RoutineLog.self
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory)
         do {

@@ -14,7 +14,9 @@ final class NotificationScheduler {
 
     static let shared = NotificationScheduler()
 
-    private let center = UNUserNotificationCenter.current()
+    /// Interno y no privado porque RoutineNotifications.swift lo extiende
+    /// desde otro archivo, y `private` solo alcanza al archivo propio.
+    let center = UNUserNotificationCenter.current()
 
     private init() {}
 

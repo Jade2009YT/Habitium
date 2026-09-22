@@ -469,6 +469,49 @@
     </section>
 
     <!-- ─────────── Estudios ─────────── -->
+    <section id="view-routines" class="view" hidden>
+      <!-- El aviso de qué pasa de verdad con las notificaciones en un
+           navegador. Va arriba del todo y solo mientras haga falta: es
+           la diferencia entre que los avisos funcionen o no. -->
+      <article class="card notice" id="routines-permission" hidden>
+        <div class="notice-body">
+          <span class="notice-icon" aria-hidden="true">🔔</span>
+          <div>
+            <h2>Avisos</h2>
+            <p class="muted sm" id="routines-permission-text"></p>
+          </div>
+        </div>
+        <div class="composer-row">
+          <button class="btn btn-primary" id="routines-permission-ask" type="button">Activar avisos</button>
+          <button class="btn btn-ghost" id="routines-permission-test" type="button" hidden>Probar</button>
+        </div>
+      </article>
+
+      <div id="routines-list"></div>
+
+      <article class="card" id="routines-empty" hidden>
+        <header class="card-head">
+          <span class="card-head-inner"><span class="badge" aria-hidden="true">🔁</span><h2>Tus rutinas</h2></span>
+        </header>
+        <p class="muted">Una rutina es una cadena: te levantas, te duchas, te lavas los dientes,
+           desayunas. Pones la hora de inicio y cuánto dura cada paso, y Habitium te va avisando.
+           Si un día vas rápido o te quedas dormido, los avisos se mueven contigo.</p>
+        <div class="composer-row">
+          <button class="btn btn-primary" id="routine-template-morning" type="button">☀️ Empezar con una de mañana</button>
+          <button class="btn btn-ghost" id="routine-template-night" type="button">🌙 Una de antes de dormir</button>
+        </div>
+      </article>
+
+      <form id="routine-form" class="composer">
+        <div class="composer-row">
+          <input id="routine-name" type="text" placeholder="Nueva rutina" maxlength="120" required>
+          <input id="routine-icon" class="w-xs" type="text" placeholder="🔁" maxlength="2">
+          <input id="routine-start" class="w-sm" type="time" value="07:15" required>
+          <button class="btn btn-primary" type="submit">Crear</button>
+        </div>
+      </form>
+    </section>
+
     <section id="view-study" class="view" hidden>
       <!-- Lo que viene primero: si tienes un examen en tres días, eso es
            lo único que importa al abrir esta pantalla. -->

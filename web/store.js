@@ -23,6 +23,7 @@
 // cola para siempre.
 
 const DB_NAME = "habitium";
+// v4: routines + routine_steps + routine_logs (rutinas encadenadas).
 // v3: subjects + grades + study_events (Estudios).
 // v2: xp_events + player_profiles (progresión). Subir este número es
 // OBLIGATORIO al añadir una tabla: onupgradeneeded solo se ejecuta
@@ -30,7 +31,7 @@ const DB_NAME = "habitium";
 // abierta alguna vez se quedaría sin los almacenes nuevos y fallaría al
 // escribir, mientras que en un navegador nuevo funcionaría. Un fallo que
 // solo le pasa a los que ya la usaban es de los peores de encontrar.
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 /** Tablas replicadas en local. Deben existir en supabase/schema.sql. */
 export const TABLES = [
@@ -51,6 +52,9 @@ export const TABLES = [
   "subjects",
   "grades",
   "study_events",
+  "routines",
+  "routine_steps",
+  "routine_logs",
 ];
 
 /** Tablas con exactamente una fila por usuario: se emparejan por
@@ -189,6 +193,8 @@ export async function remove(table, id) {
     habits: [["habit_logs", "habit_id"]],
     medications: [["medication_dose_logs", "medication_id"]],
     subjects: [["grades", "subject_id"], ["study_events", "subject_id"]],
+    routines: [["routine_steps", "routine_id"], ["routine_logs", "routine_id"]],
+    routine_steps: [["routine_logs", "step_id"]],
   };
   for (const [child, key] of cascades[table] ?? []) {
     for (const row of await idbAll(child)) {

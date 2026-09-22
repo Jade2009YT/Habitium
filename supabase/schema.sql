@@ -357,6 +357,70 @@ create table if not exists public.study_events (
   updated_at timestamptz not null default now()
 );
 
+
+-- =========================================================================
+-- Rutinas encadenadas
+--
+-- El caso que las pide: "a las 7:15 me levanto, luego me ducho, luego me
+-- lavo los dientes, luego desayuno". Eso no es una lista de tareas ni
+-- cinco alarmas sueltas — es UNA cosa con orden y con ritmo.
+--
+-- Por qué se guardan una hora de inicio Y una duración por paso, en vez
+-- de una hora por paso:
+--
+--   · Con una hora fija en cada paso, el día que te levantas diez minutos
+--     tarde todos los avisos van desfasados y acabas ignorándolos. Y el
+--     día que te duchas rápido, esperas mirando el móvil.
+--   · Con encadenado puro (cada paso empieza al marcar el anterior), el
+--     PRIMER aviso no sonaría nunca: no hay nada que marcar antes.
+--
+-- Guardando inicio + duraciones se pueden hacer las dos cosas: los avisos
+-- salen a la hora calculada, y al marcar un paso se recalculan los que
+-- quedan desde ese momento real. Ver web/routines.js.
+-- =========================================================================
+
+create table if not exists public.routines (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  name text not null,
+  icon text not null default '☀️',
+  -- Minutos desde medianoche, igual que medications: 7:15 son 435. Así no
+  -- hay líos de zona horaria — una rutina de mañana es a las 7:15 estés
+  -- donde estés, no "a las 5:15 UTC".
+  start_minutes integer not null default 435 check (start_minutes between 0 and 1439),
+  -- 1 = lunes … 7 = domingo (ISO). Vacío significa todos los días.
+  days_of_week integer[] not null default '{1,2,3,4,5}',
+  is_active boolean not null default true,
+  notifications_enabled boolean not null default true,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.routine_steps (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  routine_id uuid not null references public.routines(id) on delete cascade,
+  title text not null,
+  icon text not null default '✅',
+  -- Cuánto dura ESTE paso. El siguiente empieza cuando este acaba.
+  duration_minutes integer not null default 10 check (duration_minutes between 1 and 720),
+  sort_order integer not null default 0,
+  updated_at timestamptz not null default now()
+);
+
+-- Un paso marcado un día concreto. Es lo que da la racha de la rutina y
+-- lo que permite recalcular los avisos que quedan: `date` no es el día,
+-- es el INSTANTE real en que se marcó.
+create table if not exists public.routine_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  routine_id uuid not null references public.routines(id) on delete cascade,
+  step_id uuid not null references public.routine_steps(id) on delete cascade,
+  date timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 -- =========================================================================
 -- RLS: activar + una política "todo" por tabla (auth.uid() = user_id)
 -- =========================================================================
@@ -374,6 +438,7 @@ begin
     'workout_sets',
     'player_profiles', 'xp_events',
     'subjects', 'grades', 'study_events',
+    'routines', 'routine_steps', 'routine_logs',
     'user_settings'
   ]
   loop
@@ -399,6 +464,8 @@ create index if not exists weight_entries_user_date_idx on public.weight_entries
 create index if not exists xp_events_user_date_idx on public.xp_events (user_id, date);
 create index if not exists grades_user_subject_idx on public.grades (user_id, subject_id);
 create index if not exists study_events_user_date_idx on public.study_events (user_id, date);
+create index if not exists routine_steps_routine_idx on public.routine_steps (user_id, routine_id);
+create index if not exists routine_logs_user_date_idx on public.routine_logs (user_id, date);
 
 -- =========================================================================
 -- SEGURIDAD (segunda ronda)
@@ -605,6 +672,7 @@ declare
     'habits', 'habit_logs', 'workout_sets',
     'player_profiles', 'xp_events',
     'subjects', 'grades', 'study_events',
+    'routines', 'routine_steps', 'routine_logs',
     'user_settings'
   ];
 begin
@@ -673,6 +741,14 @@ begin
 exception when duplicate_object then null;
 end $$;
 
+do $$
+begin
+  alter table public.routines
+    add constraint routines_days_len
+    check (array_length(days_of_week, 1) is null or array_length(days_of_week, 1) <= 7);
+exception when duplicate_object then null;
+end $$;
+
 -- Y los minutos de recordatorio de una medicación: 1440 minutos tiene el
 -- día, así que más de 48 avisos ya no es un uso, es un ataque.
 do $$
@@ -734,7 +810,8 @@ begin
       ('habits', 200), ('habit_logs', 100000),
       ('workout_sets', 100000),
       ('xp_events', 100000),
-      ('subjects', 100), ('grades', 5000), ('study_events', 5000)
+      ('subjects', 100), ('grades', 5000), ('study_events', 5000),
+      ('routines', 50), ('routine_steps', 500), ('routine_logs', 100000)
     ) as v(tabla, maximo)
   loop
     execute format('drop trigger if exists %I on public.%I',
@@ -752,6 +829,7 @@ create index if not exists habits_user_idx    on public.habits (user_id);
 create index if not exists medications_user_idx on public.medications (user_id);
 create index if not exists category_budgets_user_idx on public.category_budgets (user_id);
 create index if not exists recurring_transactions_user_idx on public.recurring_transactions (user_id);
+create index if not exists routines_user_idx on public.routines (user_id);
 
 -- ── D. Higiene de permisos ──────────────────────────────────────────────
 --
@@ -771,6 +849,7 @@ begin
     'habits', 'habit_logs', 'workout_sets',
     'player_profiles', 'xp_events',
     'subjects', 'grades', 'study_events',
+    'routines', 'routine_steps', 'routine_logs',
     'user_settings'
   ] loop
     execute format('revoke all on public.%I from anon', t);

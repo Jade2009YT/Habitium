@@ -878,6 +878,96 @@ Lo que se hizo distinto, y por qué:
   esta app presume de funcionar sin conexión y una fuente remota la
   dejaría a medio pintar.
 
+## Rutinas encadenadas y avisos
+
+El caso que las pide, tal cual: *"a las 7:15 me levanto, luego me ducho,
+luego me lavo los dientes, luego desayunar"*. Eso no es una lista de
+tareas ni cinco alarmas sueltas: es **una** cosa, con orden y con ritmo.
+
+### La decisión de diseño, que no es obvia
+
+Se guarda **una hora de inicio + una duración por paso**, nunca una hora
+por paso. Las dos alternativas sueltas fallan:
+
+- **Hora fija en cada paso.** El día que te levantas diez minutos tarde,
+  los cuatro avisos van desfasados y acabas silenciándolos. Y el día que
+  te duchas rápido, esperas mirando el móvil.
+- **Encadenado puro** (cada paso arranca al marcar el anterior). El
+  PRIMER aviso no suena nunca: no hay nada que marcar antes de él.
+
+Con inicio + duraciones se hacen las dos cosas a la vez. La regla, en una
+frase: **el reloj lo pone el último paso marcado.** Los pasos hechos
+enseñan la hora real a la que se marcaron; los que quedan se encadenan
+desde ahí. Si te duchas en cinco minutos, el aviso de los dientes se
+adelanta cinco minutos. Si te quedas dormido, todo se desplaza contigo en
+vez de gritarte. La fila lo dice: "7:37 · recalculado".
+
+El cálculo está en `web/routines.js` y en `RoutineSchedule.swift`. Son
+dos copias a propósito —una en JS y otra en Swift— porque la misma cuenta
+tiene que ver lo mismo en los dos sitios; los dos juegos de pruebas usan
+los mismos casos.
+
+### Los avisos: dónde funcionan de verdad y dónde no
+
+Aquí el iPhone gana a la web, y por mucho. Conviene saberlo antes de
+fiarse:
+
+| | iPhone (app nativa) | Web / Android (PWA) |
+|---|---|---|
+| App cerrada | ✅ suenan | ❌ no |
+| Móvil bloqueado | ✅ suenan | ✅ solo si la app sigue abierta de fondo |
+| Programación | 3 días por adelantado | mientras la pestaña viva |
+
+**Por qué.** Una página web no puede programar una notificación para
+dentro de tres horas y desentenderse: la API que hacía justo eso
+("Notification Triggers") se probó en Chrome y se retiró, y no está en
+ningún navegador. Las push sí funcionan con la app cerrada, pero
+necesitan un servidor propio empujándolas (claves VAPID, un proceso
+escuchando) — Supabase solo no basta, y eso es otro proyecto.
+
+Así que `web/avisos.js` hace el máximo que se puede sin servidor, y la
+pantalla lo dice en vez de disimularlo: los avisos saltan mientras
+Habitium esté abierta, y al volver se te recuerda **una sola vez** el que
+se te acaba de pasar (solo el último, y solo si fue hace menos de diez
+minutos — soltar cuatro notificaciones de golpe al abrir la app por la
+tarde es la forma más rápida de que alguien las desactive para siempre).
+
+En iOS son `UNCalendarNotificationTrigger` de verdad. Dos detalles que
+tiene `RoutineNotifications.swift`:
+
+- Se programan **3 días por adelantado**, no solo hoy: si solo fuera hoy
+  y no abrieras la app por la noche, mañana no sonaría nada. Pero no más,
+  porque iOS admite 64 notificaciones pendientes por app y **tira las que
+  sobran sin avisar**.
+- Van con `threadIdentifier`, así que las cuatro de la mañana se agrupan
+  en una sola pila en la pantalla de bloqueo. Cuatro notificaciones
+  sueltas a las siete de la mañana son cuatro interrupciones; una pila
+  con cuatro dentro es una.
+
+### Detalles que parecen tonterías y no lo son
+
+- **El fin de semana no rompe la racha** de una rutina de L-V. Los días
+  que no toca se saltan, no cuentan en contra. Castigarte el sábado por
+  una rutina de días de colegio es el fallo que tienen la mitad de las
+  apps de hábitos.
+- **Hoy a medias tampoco la rompe**: si aún no la has terminado pero el
+  día no ha acabado, la racha es la de ayer.
+- **"Ahora" no es "el siguiente".** El primer paso sin marcar de la
+  rutina de noche también lo es a las dos de la tarde; la etiqueta
+  "ahora" solo sale si el paso toca dentro de ±15 minutos. Esto se vio
+  mirando la pantalla, no leyendo el código.
+- **Un atraso de horas no es un atraso.** Antes ponía "vas 392 min
+  tarde", que hacía que la tarjeta pareciera rota. Pasadas dos horas dice
+  "Hoy no ha salido" o "Se quedó en 2 de 4".
+- **El XP se da al terminar la rutina entera**, nunca paso a paso. Si
+  cada paso puntuara, la forma más rápida de subir de nivel sería crear
+  una rutina de veinte pasos tontos.
+- **El id de cada aviso no lleva la hora.** Si la llevara, cada recálculo
+  crearía un aviso nuevo en vez de reemplazar el anterior, y acabarías
+  con cinco del mismo paso.
+
+38 pruebas en `web/routines.test.mjs`.
+
 ## Estudios — asignaturas, notas y asistencia
 
 El módulo que cierra la idea original del sistema de niveles: *"cada día

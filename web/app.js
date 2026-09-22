@@ -33,6 +33,8 @@ import * as player from "./player.js";
 import * as prog from "./progression.js";
 import * as study from "./study.js";
 import * as seg from "./seguridad.js";
+import * as rut from "./routines.js";
+import * as avisos from "./avisos.js";
 
 const cfg = window.HABITIUM_CONFIG;
 const isConfigured =
@@ -410,6 +412,7 @@ $("sign-out-2").addEventListener("click", doSignOut);
 const NAV = [
   { id: "home", label: "Inicio", icon: "🏠" },
   { id: "progress", label: "Progreso", icon: "🏆" },
+  { id: "routines", label: "Rutinas", icon: "🔁" },
   { id: "study", label: "Estudios", icon: "🎓" },
   { id: "nutrition", label: "Nutrición", icon: "🍎" },
   { id: "planner", label: "Agenda", icon: "📅" },
@@ -419,10 +422,15 @@ const NAV = [
   { id: "settings", label: "Ajustes", icon: "⚙️" },
 ];
 
-// La barra del móvil no puede con nueve destinos sin quedar ilegible.
-// Finanzas, Medicación y Ajustes se alcanzan desde las tarjetas de
-// Inicio, y Progreso desde la píldora de nivel de la cabecera.
-const MOBILE_TABS = ["home", "study", "nutrition", "planner", "habits"];
+// La barra del móvil no puede con diez destinos sin quedar ilegible.
+// Finanzas, Medicación, Hábitos y Ajustes se alcanzan desde las tarjetas
+// de Inicio, y Progreso desde la píldora de nivel de la cabecera.
+//
+// Rutinas entra en la barra y Hábitos sale: una rutina se toca cuatro
+// veces cada mañana, con el móvil en la mano y medio dormido, mientras
+// que a Hábitos se entra una vez al día. Quien decide qué va en la barra
+// es cuántas veces al día hay que llegar ahí rápido, no la importancia.
+const MOBILE_TABS = ["home", "routines", "study", "nutrition", "planner"];
 
 function buildNav() {
   $("side-nav").innerHTML = NAV.map(
@@ -526,6 +534,7 @@ async function render() {
     home: loadHome,
     progress: loadProgress,
     study: loadStudy,
+    routines: loadRoutines,
     nutrition: loadNutrition,
     planner: loadPlanner,
     finance: loadFinance,
@@ -1833,6 +1842,379 @@ $("password-new")?.addEventListener("input", () => {
   $("password-strength-text").textContent = texto;
 });
 
+// ── Rutinas encadenadas ─────────────────────────────────────────────
+//
+// El caso que las pide: "a las 7:15 me levanto, luego me ducho, luego me
+// lavo los dientes, luego desayuno". Todo el cálculo de horarios está en
+// routines.js y probado aparte; aquí solo se pinta y se guarda.
+//
+// Lo único con enjundia de este archivo es `reprogramarAvisos()`: cada
+// vez que cambia algo hay que rehacer los avisos ENTEROS, porque marcar
+// un paso mueve en cascada todos los que vienen detrás.
+
+/** La rutina que tiene los pasos desplegados. Se recuerda entre
+ *  repintados para que marcar un paso no te cierre la lista en la cara. */
+let rutinaAbierta = null;
+
+async function datosDeRutinas() {
+  const [routines, steps, logs] = await Promise.all([
+    store.all("routines"),
+    store.all("routine_steps"),
+    store.all("routine_logs"),
+  ]);
+  routines.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || (a.start_minutes ?? 0) - (b.start_minutes ?? 0));
+  return { routines, steps, logs };
+}
+
+/** Rehace los avisos desde cero con el estado actual. Se llama SIEMPRE
+ *  después de tocar cualquier cosa: una rutina, un paso o una marca. */
+async function reprogramarAvisos() {
+  try {
+    avisos.reprogramar(await datosDeRutinas());
+  } catch (error) {
+    console.warn("avisos:", error);
+  }
+}
+
+async function loadRoutines() {
+  pintarPermisoAvisos();
+
+  const { routines, steps, logs } = await datosDeRutinas();
+  const ahora = new Date();
+
+  $("routines-empty").hidden = routines.length > 0;
+  $("routines-list").innerHTML = routines
+    .map((r) => tarjetaDeRutina(r, steps, logs, ahora))
+    .join("");
+
+  cablearRutinas(routines, steps);
+  avisos.reprogramar({ routines, steps, logs }, ahora);
+}
+
+function tarjetaDeRutina(routine, steps, logs, ahora) {
+  const pasos = rut.horario(routine, steps, logs, ahora);
+  const { hechos, total } = rut.progreso(routine, steps, logs, ahora);
+  const dias = rut.racha(routine, steps, logs, ahora);
+  const abierta = rutinaAbierta === routine.id;
+  const hoyToca = rut.tocaHoy(routine, ahora);
+
+  return `
+  <article class="card routine ${hoyToca ? "" : "is-off"} ${total && hechos === total ? "is-done" : ""}">
+    <header class="card-head">
+      <span class="card-head-inner">
+        <span class="badge" aria-hidden="true">${esc(routine.icon ?? "🔁")}</span>
+        <h2>${esc(routine.name)}</h2>
+      </span>
+      <span class="routine-meta">
+        ${dias > 0 ? `<span class="pill streak">🔥 ${dias}</span>` : ""}
+        <span class="pill">${hechos}/${total}</span>
+      </span>
+    </header>
+
+    <p class="routine-summary">${esc(rut.resumen(routine, steps, logs, ahora))}</p>
+
+    ${total ? `<div class="routine-bar" role="img" aria-label="${hechos} de ${total} pasos">
+      <i style="width:${total ? Math.round((hechos / total) * 100) : 0}%"></i>
+    </div>` : ""}
+
+    <ol class="routine-steps">
+      ${pasos.map((f) => filaDePaso(routine, f)).join("")}
+    </ol>
+
+    <div class="routine-actions">
+      <button class="btn btn-ghost btn-sm" data-routine-toggle="${routine.id}">
+        ${abierta ? "Cerrar ajustes" : "Ajustes de la rutina"}
+      </button>
+    </div>
+
+    ${abierta ? ajustesDeRutina(routine, steps) : ""}
+  </article>`;
+}
+
+function filaDePaso(routine, fila) {
+  const { paso, hecho, enMarcha, hora, previsto } = fila;
+  const h = `${hora.getHours()}:${String(hora.getMinutes()).padStart(2, "0")}`;
+
+  return `
+  <li class="routine-step ${hecho ? "is-done" : ""} ${enMarcha ? "is-now" : ""}">
+    <button class="check ${hecho ? "is-checked" : ""}"
+            data-step-toggle="${paso.id}" data-routine="${routine.id}" data-done="${hecho}"
+            aria-label="${hecho ? "Desmarcar" : "Marcar"} ${esc(paso.title)}">✓</button>
+    <span class="routine-step-icon" aria-hidden="true">${esc(paso.icon ?? "✅")}</span>
+    <div class="routine-step-main">
+      <div class="routine-step-title">${esc(paso.title)}</div>
+      <div class="routine-step-sub">
+        ${hecho ? `hecho a las ${h}` : `${h}${previsto ? "" : " · recalculado"} · ${paso.duration_minutes} min`}
+      </div>
+    </div>
+    ${fila.esAhora ? '<span class="pill now">ahora</span>' : ""}
+  </li>`;
+}
+
+function ajustesDeRutina(routine, steps) {
+  const pasos = rut.pasosDe(routine, steps);
+  const dias = routine.days_of_week ?? [];
+
+  return `
+  <div class="routine-settings">
+    <div class="form-grid">
+      <label class="field"><span>Empieza a las</span>
+        <input type="time" data-routine-start="${routine.id}"
+               value="${String(Math.floor((routine.start_minutes ?? 0) / 60)).padStart(2, "0")}:${String((routine.start_minutes ?? 0) % 60).padStart(2, "0")}">
+      </label>
+      <label class="field"><span>Nombre</span>
+        <input type="text" maxlength="120" data-routine-name="${routine.id}" value="${esc(routine.name)}">
+      </label>
+    </div>
+
+    <div class="day-picker" role="group" aria-label="Días de la semana">
+      ${rut.NOMBRES_DIA.map((nombre, i) => `
+        <button type="button" class="day ${dias.includes(i + 1) ? "is-on" : ""}"
+                data-routine-day="${routine.id}" data-day="${i + 1}"
+                aria-pressed="${dias.includes(i + 1)}">${nombre}</button>`).join("")}
+    </div>
+
+    <label class="shared-check">
+      <input type="checkbox" data-routine-notify="${routine.id}" ${routine.notifications_enabled ? "checked" : ""}>
+      <span>Avisarme de cada paso <small>Solo mientras Habitium esté abierta en este dispositivo.</small></span>
+    </label>
+
+    <h3 class="routine-subhead">Pasos</h3>
+    <ul class="list">
+      ${pasos.map((p) => `
+        <li class="row">
+          <span class="routine-step-icon" aria-hidden="true">${esc(p.icon ?? "✅")}</span>
+          <div class="row-main">
+            <div class="row-title">${esc(p.title)}</div>
+            <div class="row-sub"><span>${p.duration_minutes} min</span></div>
+          </div>
+          <button class="delete" data-step-del="${p.id}" title="Eliminar paso" aria-label="Eliminar paso">✕</button>
+        </li>`).join("") || emptyState("🪜", "Sin pasos todavía", "Añade el primero abajo.")}
+    </ul>
+
+    <form class="composer-row" data-step-form="${routine.id}">
+      <input type="text" name="titulo" placeholder="Nuevo paso" maxlength="120" required>
+      <input type="text" name="icono" class="w-xs" placeholder="✅" maxlength="2">
+      <input type="number" name="minutos" class="w-sm" min="1" max="720" step="1" value="10" required>
+      <button class="btn btn-primary" type="submit">Añadir</button>
+    </form>
+
+    <button class="btn btn-ghost danger btn-sm" data-routine-del="${routine.id}">Eliminar esta rutina</button>
+  </div>`;
+}
+
+function cablearRutinas(routines, steps) {
+  const lista = $("routines-list");
+
+  // Marcar / desmarcar un paso.
+  lista.querySelectorAll("[data-step-toggle]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const stepId = btn.dataset.stepToggle;
+      const routineId = btn.dataset.routine;
+
+      if (btn.dataset.done === "true") {
+        // Desmarcar: fuera TODAS las marcas de hoy de ese paso. Si se
+        // borrara solo una, una marca duplicada de otro dispositivo lo
+        // dejaría marcado y parecería que el botón no hace nada.
+        const hoy = new Date();
+        for (const log of await store.all("routine_logs")) {
+          if (log.step_id !== stepId) continue;
+          const d = new Date(log.date);
+          if (d.toDateString() === hoy.toDateString()) await store.remove("routine_logs", log.id);
+        }
+      } else {
+        await store.insert("routine_logs", {
+          routine_id: routineId,
+          step_id: stepId,
+          date: nowISO(),
+        });
+
+        // XP solo al terminar la rutina entera, no por paso: si cada paso
+        // diera puntos, crear una rutina de veinte pasos tontos sería la
+        // forma más rápida de subir de nivel.
+        const { routines: rs, steps: ss, logs: ls } = await datosDeRutinas();
+        const routine = rs.find((r) => r.id === routineId);
+        if (routine && rut.completa(routine, ss, ls)) {
+          await awardXP("routineCompleted", `rutina:${idKey(routineId)}:${rut.claveDia(new Date())}`);
+        }
+      }
+      await reprogramarAvisos();
+    });
+  });
+
+  // Abrir / cerrar los ajustes.
+  lista.querySelectorAll("[data-routine-toggle]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      rutinaAbierta = rutinaAbierta === btn.dataset.routineToggle ? null : btn.dataset.routineToggle;
+      loadRoutines();
+    });
+  });
+
+  lista.querySelectorAll("[data-routine-start]").forEach((input) => {
+    input.addEventListener("change", async () => {
+      const minutos = rut.minutosDesdeTexto(input.value);
+      if (minutos === null) return;
+      await store.update("routines", input.dataset.routineStart, { start_minutes: minutos });
+      await reprogramarAvisos();
+    });
+  });
+
+  lista.querySelectorAll("[data-routine-name]").forEach((input) => {
+    input.addEventListener("change", async () => {
+      const nombre = input.value.trim();
+      if (nombre) await store.update("routines", input.dataset.routineName, { name: nombre });
+    });
+  });
+
+  lista.querySelectorAll("[data-routine-day]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const routine = routines.find((r) => r.id === btn.dataset.routineDay);
+      if (!routine) return;
+      const dia = Number(btn.dataset.day);
+      const actuales = new Set(routine.days_of_week ?? []);
+      actuales.has(dia) ? actuales.delete(dia) : actuales.add(dia);
+      await store.update("routines", routine.id, { days_of_week: [...actuales].sort() });
+      await reprogramarAvisos();
+    });
+  });
+
+  lista.querySelectorAll("[data-routine-notify]").forEach((input) => {
+    input.addEventListener("change", async () => {
+      await store.update("routines", input.dataset.routineNotify, {
+        notifications_enabled: input.checked,
+      });
+      if (input.checked && avisos.estadoPermiso() === "default") await pedirAvisos();
+      await reprogramarAvisos();
+    });
+  });
+
+  lista.querySelectorAll("[data-step-form]").forEach((form) => {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const routineId = form.dataset.stepForm;
+      const titulo = form.titulo.value.trim();
+      if (!titulo) return;
+
+      await store.insert("routine_steps", {
+        routine_id: routineId,
+        title: titulo,
+        icon: form.icono.value.trim() || "✅",
+        duration_minutes: Math.min(720, Math.max(1, Number(form.minutos.value) || 10)),
+        sort_order: rut.pasosDe({ id: routineId }, steps).length,
+      });
+      form.reset();
+      form.minutos.value = "10";
+      await reprogramarAvisos();
+    });
+  });
+
+  lista.querySelectorAll("[data-step-del]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await store.remove("routine_steps", btn.dataset.stepDel);
+      await reprogramarAvisos();
+    });
+  });
+
+  lista.querySelectorAll("[data-routine-del]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("¿Eliminar la rutina entera, con sus pasos?")) return;
+      rutinaAbierta = null;
+      await store.remove("routines", btn.dataset.routineDel);
+      await reprogramarAvisos();
+    });
+  });
+}
+
+// ── Crear rutinas ───────────────────────────────────────────────────
+
+$("routine-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const nombre = $("routine-name").value.trim();
+  if (!nombre) return;
+
+  const routine = await store.insert("routines", {
+    name: nombre,
+    icon: $("routine-icon").value.trim() || "🔁",
+    start_minutes: rut.minutosDesdeTexto($("routine-start").value) ?? 435,
+    days_of_week: [1, 2, 3, 4, 5],
+    is_active: true,
+    notifications_enabled: true,
+    sort_order: (await store.all("routines")).length,
+    created_at: nowISO(),
+  });
+
+  e.target.reset();
+  $("routine-start").value = "07:15";
+  // Se abre sola: una rutina sin pasos no sirve de nada, así que lo
+  // siguiente que hay que hacer es añadirlos.
+  rutinaAbierta = routine.id;
+  if (avisos.estadoPermiso() === "default") await pedirAvisos();
+});
+
+/** Crea una rutina entera desde una plantilla. Ofrecerla es lo que
+ *  diferencia "aquí tienes un formulario vacío" de "toma, esto ya es
+ *  tu rutina de mañana, cámbiala a tu gusto". */
+async function crearDesdePlantilla(plantilla) {
+  const routine = await store.insert("routines", {
+    name: plantilla.name,
+    icon: plantilla.icon,
+    start_minutes: plantilla.start_minutes,
+    days_of_week: plantilla.days_of_week,
+    is_active: true,
+    notifications_enabled: true,
+    sort_order: (await store.all("routines")).length,
+    created_at: nowISO(),
+  });
+
+  for (const [i, paso] of plantilla.pasos.entries()) {
+    await store.insert("routine_steps", {
+      routine_id: routine.id,
+      title: paso.title,
+      icon: paso.icon,
+      duration_minutes: paso.duration_minutes,
+      sort_order: i,
+    });
+  }
+
+  if (avisos.estadoPermiso() === "default") await pedirAvisos();
+  await reprogramarAvisos();
+}
+
+$("routine-template-morning")?.addEventListener("click", () => crearDesdePlantilla(rut.PLANTILLA_MANANA));
+$("routine-template-night")?.addEventListener("click", () => crearDesdePlantilla(rut.PLANTILLA_NOCHE));
+
+// ── Permiso de avisos ───────────────────────────────────────────────
+
+/** Se pone a true justo después de conceder el permiso, para que la caja
+ *  de avisos no desaparezca en el mismo instante en que dices que sí:
+ *  hay que poder ver el botón de "Probar". */
+let avisoRecienDado = false;
+
+function pintarPermisoAvisos() {
+  const caja = $("routines-permission");
+  if (!caja) return;
+
+  const estado = avisos.estadoPermiso();
+  $("routines-permission-text").textContent = avisos.explicacion();
+  $("routines-permission-ask").hidden = estado !== "default";
+  $("routines-permission-test").hidden = estado !== "granted";
+
+  // Con el permiso dado y todo funcionando, la caja estorba. Se queda
+  // solo si hay algo que hacer o algo que explicar.
+  caja.hidden = estado === "granted" && !avisoRecienDado;
+}
+
+async function pedirAvisos() {
+  const resultado = await avisos.pedirPermiso();
+  avisoRecienDado = resultado === "granted";
+  pintarPermisoAvisos();
+  await reprogramarAvisos();
+  return resultado;
+}
+
+$("routines-permission-ask")?.addEventListener("click", pedirAvisos);
+$("routines-permission-test")?.addEventListener("click", () => avisos.avisoDePrueba());
+
 // ── Estudios ────────────────────────────────────────────────────────
 //
 // El módulo que cierra la idea original del sistema de niveles: "cada
@@ -2273,7 +2655,13 @@ async function showApp() {
   $("side-email").textContent = email;
   $("side-avatar").textContent = email.charAt(0) || "·";
 
-  go("home");        // pinta ya, desde lo que haya en local
+  // Normalmente Inicio; salvo que se venga de pulsar un aviso de rutina.
+  let inicial = "home";
+  try {
+    inicial = sessionStorage.getItem("habitium.vista-inicial") || "home";
+    sessionStorage.removeItem("habitium.vista-inicial");
+  } catch (e) {}
+  go(inicial);       // pinta ya, desde lo que haya en local
 
   // Primero traer lo que haya en la nube, y SOLO DESPUÉS contar el día.
   //
@@ -2295,7 +2683,32 @@ async function showApp() {
   } catch (error) {
     console.warn("racha:", error);
   }
+
+  // Los avisos van DESPUÉS del sync: programarlos antes usaría los datos
+  // viejos del dispositivo y podría avisar de un paso que ya marcaste
+  // desde el móvil hace diez minutos.
+  try {
+    const estado = await datosDeRutinas();
+    avisos.reprogramar(estado);
+    await avisos.recuperarPerdido(estado);
+  } catch (error) {
+    console.warn("avisos:", error);
+  }
 }
+
+// Pulsar un aviso de rutina trae la app al frente y la lleva a Rutinas
+// (ver sw.js). Si la app ya estaba abierta llega por mensaje; si se
+// abrió desde cero, por el parámetro de la URL.
+navigator.serviceWorker?.addEventListener("message", (e) => {
+  if (e.data?.tipo === "ir-a-rutinas") go("routines");
+});
+try {
+  if (new URLSearchParams(location.search).get("vista") === "routines") {
+    // Se guarda para después de mostrar la app: go() todavía no puede
+    // pintar nada porque la sesión no está comprobada.
+    sessionStorage.setItem("habitium.vista-inicial", "routines");
+  }
+} catch (e) {}
 
 buildNav();
 syncHabitKindFields();

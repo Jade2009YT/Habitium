@@ -10,6 +10,7 @@ import SwiftUI
 
 enum AppTab: Hashable {
     case home
+    case routines
     case nutrition
     case planner
     case finance
@@ -24,6 +25,14 @@ struct MainTabView: View {
             HomeView(selectedTab: $selectedTab)
                 .tabItem { Label("Inicio", systemImage: "house.fill") }
                 .tag(AppTab.home)
+
+            // Rutinas va la segunda, justo después de Inicio: es lo que
+            // se toca cuatro veces cada mañana, con el móvil en la mano y
+            // medio dormido. El orden de la barra lo decide cuántas veces
+            // al día hay que llegar ahí rápido.
+            RoutinesView()
+                .tabItem { Label("Rutinas", systemImage: "repeat.circle.fill") }
+                .tag(AppTab.routines)
 
             FoodTrackerView()
                 .tabItem { Label("Nutrición", systemImage: "fork.knife.circle.fill") }

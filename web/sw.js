@@ -21,7 +21,7 @@
 // Al cambiar los archivos de la app, sube también este archivo con
 // CACHE_VERSION incrementado — así se limpian las cachés antiguas.
 
-const CACHE_VERSION = "habitium-v6";
+const CACHE_VERSION = "habitium-v7";
 
 const SHELL = [
   "./",
@@ -36,6 +36,8 @@ const SHELL = [
   "./player.js",
   "./study.js",
   "./seguridad.js",
+  "./routines.js",
+  "./avisos.js",
   "./config.js",
   "./manifest.webmanifest",
   "./icon.png",
@@ -108,6 +110,30 @@ self.addEventListener("fetch", (event) => {
 
       // Caché al instante si la hay; si no, lo que traiga la red.
       return cached || network;
+    })
+  );
+});
+
+// ── Pulsar un aviso de rutina ───────────────────────────────────────
+//
+// Sin esto, tocar la notificación no hace nada (o abre una pestaña nueva
+// en blanco), que es la forma más rápida de que dejen de tocarse.
+//
+// Lo que hace: si Habitium ya está abierta en alguna pestaña, la trae al
+// frente en vez de abrir otra — nadie quiere seis copias de su app. Y le
+// manda un mensaje para que salte a Rutinas.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((abiertas) => {
+      for (const cliente of abiertas) {
+        if (cliente.url.includes("/index.html") || cliente.url.endsWith("/")) {
+          cliente.postMessage({ tipo: "ir-a-rutinas", datos: event.notification.data });
+          return cliente.focus();
+        }
+      }
+      return self.clients.openWindow("./index.html?vista=routines");
     })
   );
 });

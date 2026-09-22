@@ -2139,3 +2139,114 @@ input[type="color"] { min-height: 0; padding: 0; }
 
 #sec-status:empty { display: none; }
 #sec-status.is-ok { color: var(--green); font-weight: 600; }
+
+/* ═══ RUTINAS ════════════════════════════════════════════════════════
+   Una rutina es una cadena, y la pantalla tiene que leerse como tal: de
+   arriba abajo, con el paso de ahora destacado y los hechos apagados
+   pero visibles — verlos tachados es media recompensa. */
+
+.routine { display: grid; gap: 14px; }
+.routine.is-off { opacity: 0.55; }        /* hoy no toca */
+.routine-meta { display: flex; gap: 6px; align-items: center; }
+.pill.streak { background: var(--orange-soft); color: var(--orange); }
+.pill.now { background: var(--green); color: #fff; font-size: 11px; }
+
+.routine-summary { margin: 0; font-size: 15px; font-weight: 600; color: var(--text); }
+.routine.is-done .routine-summary { color: var(--green); }
+
+.routine-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+.routine-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--green);
+  transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.routine.is-done .routine-bar i { background: var(--green); }
+
+.routine-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+
+.routine-step {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  /* La línea que une los pasos: es lo que hace que se lea como una
+     cadena y no como cinco casillas sueltas. Va en el borde izquierdo
+     del icono para no necesitar un pseudo-elemento absoluto. */
+  border-left: 2px solid transparent;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.routine-step + .routine-step { border-top: 1px solid var(--border); border-radius: 0 var(--r-sm) var(--r-sm) 0; }
+
+.routine-step.is-now {
+  background: var(--surface-2);
+  border-left-color: var(--green);
+}
+.routine-step.is-done { opacity: 0.6; }
+.routine-step.is-done .routine-step-title { text-decoration: line-through; }
+
+.routine-step-icon { font-size: 20px; line-height: 1; }
+.routine-step-main { min-width: 0; }
+.routine-step-title { font-size: 15px; font-weight: 600; }
+.routine-step-sub { font-size: 12px; color: var(--text-3); }
+
+.routine-actions { display: flex; }
+
+.routine-settings {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border-radius: var(--r);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.routine-settings > * { width: 100%; }
+.routine-subhead {
+  margin: 4px 0 0;
+  font-size: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.routine-settings .composer-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.routine-settings .btn-ghost.danger { justify-self: start; width: auto; }
+
+/* Los siete días. Botones pequeños, cuadrados y con estado claro: hay
+   que poder ver de un vistazo qué días toca sin leer nada. */
+.day-picker { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.day {
+  padding: 8px 0;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-3);
+  font: 600 12px/1 inherit;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+.day:hover { border-color: var(--green); }
+.day.is-on {
+  background: var(--green);
+  border-color: transparent;
+  color: #fff;
+}
+
+/* La caja que explica qué pasa de verdad con los avisos. */
+.card.notice { display: grid; gap: 14px; }
+.notice-body { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: start; }
+.notice-icon { font-size: 26px; line-height: 1; }
+.notice-body h2 { margin: 0 0 2px; font-size: 16px; }
+
+@media (max-width: 560px) {
+  .routine-step { grid-template-columns: auto auto 1fr; gap: 10px; padding: 10px 8px; }
+  .routine-step .pill.now { grid-column: 3; justify-self: end; }
+  .day-picker { gap: 4px; }
+  .day { font-size: 11px; }
+}

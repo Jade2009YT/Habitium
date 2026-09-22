@@ -6,7 +6,7 @@ Esto levanta un Postgres de usar y tirar en tu Mac, le aplica
 intenta leer, borrar y modificar datos ajenos; intenta auto-invitarse;
 intenta llenar la base; intenta colarse en el registro.
 
-Son 28 intentos. Cada uno imprime `PASA` (el ataque no funcionó, que es
+Son 30 intentos. Cada uno imprime `PASA` (el ataque no funcionó, que es
 lo que se busca) o `FALLA`.
 
 ## ⚠️ Esto NO se ejecuta en tu Supabase
@@ -37,7 +37,7 @@ psql -d habitium_prueba -f supabase/pruebas/02-ataque.sql 2>&1 \
   | grep -E "PASA|FALLA|═══"
 ```
 
-Lo que tiene que salir: 28 `PASA` y ningún `FALLA`.
+Lo que tiene que salir: 30 `PASA` y ningún `FALLA`.
 
 Al terminar, `dropdb habitium_prueba` y no queda rastro.
 

@@ -109,6 +109,11 @@ export const XP_SOURCES = {
   gradeLogged: { xp: 10, name: "Nota apuntada", icon: "📝" },
   goodGrade: { xp: 35, name: "Buena nota", icon: "🎓" },
   subjectPassing: { xp: 25, name: "Asignatura aprobada", icon: "📗" },
+  // Rutinas. Se premia terminar la rutina ENTERA, nunca paso a paso: si
+  // cada paso diera puntos, la forma más rápida de subir de nivel sería
+  // crear una rutina de veinte pasos tontos, y el sistema dejaría de
+  // medir nada.
+  routineCompleted: { xp: 45, name: "Rutina completada", icon: "🔁" },
 };
 
 export const xpFor = (source) => XP_SOURCES[source]?.xp ?? 0;

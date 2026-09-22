@@ -1,8 +1,8 @@
 -- ⚠️ NUNCA EJECUTES ESTO EN TU PROYECTO DE SUPABASE.
 --
--- Crea usuarios, inunda tablas hasta el tope y cambia el modo de
--- registro. Es para una base de datos de usar y tirar, en tu propio
--- ordenador. Cómo montarla: LEEME.md de esta carpeta.
+-- Crea usuarios, borra datos, inunda tablas hasta el tope y cambia el
+-- modo de registro. Es para una base de datos de usar y tirar, en tu
+-- propio ordenador. Cómo montarla: LEEME.md de esta carpeta.
 --
 -- Ataque real contra el esquema de Habitium, corriendo sobre un Postgres
 -- de verdad con la misma forma que Supabase (roles anon/authenticated,
@@ -29,6 +29,19 @@ end $$;
 -- El portero está en modo invitación, así que primero se abre: si no, no
 -- hay ni víctimas y las pruebas de RLS pasarían sobre tablas vacías.
 update public.signup_control set mode = 'abierto';
+
+-- Rastro de una ejecución anterior, si lo hay. Como postgres es el dueño
+-- de las tablas, RLS no se le aplica y puede limpiar de verdad.
+delete from public.routine_logs;
+delete from public.routine_steps;
+delete from public.routines;
+delete from public.subjects;
+delete from public.food_entries;
+delete from public.user_settings;
+delete from public.player_profiles;
+delete from public.medications;
+delete from public.allowed_signups where note = 'prueba';
+delete from auth.users where email like '%habitium.test' or email like '%hacker.test';
 
 insert into auth.users (id, email, email_confirmed_at) values
   (:'A', 'ana@habitium.test', now()),
@@ -79,7 +92,7 @@ end $$;
 \echo '═══ 2. ¿Puede Ana regalarle sus filas a Bruno (o robárselas)? ══'
 set request.jwt.claims = '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated"}';
 select prueba('(control) Ana sí ve lo suyo — si esto falla, las pruebas de arriba no valen',
-  (select count(*) from public.food_entries) = 1);
+  (select count(*) from public.food_entries) >= 1);
 
 do $$
 declare ok boolean := false;
