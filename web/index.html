@@ -79,7 +79,7 @@
       <p>Tu cuidado personal, todo en un solo lugar.</p>
     </div>
 
-    <div class="segmented" role="tablist">
+    <div class="segmented" role="tablist" id="auth-tabs">
       <button id="tab-signin" class="segment is-active" role="tab" type="button">Iniciar sesión</button>
       <button id="tab-signup" class="segment" role="tab" type="button">Crear cuenta</button>
     </div>
@@ -87,18 +87,46 @@
     <form id="auth-form" autocomplete="on">
       <label class="field">
         <span>Correo</span>
-        <input id="auth-email" type="email" required autocomplete="email" inputmode="email" placeholder="tu@correo.com">
+        <input id="auth-email" type="email" required autocomplete="email" inputmode="email" placeholder="tu@correo.com" maxlength="320">
       </label>
       <label class="field">
         <span>Contraseña</span>
-        <input id="auth-password" type="password" required autocomplete="current-password" minlength="10" placeholder="Mínimo 10 caracteres">
+        <input id="auth-password" type="password" required autocomplete="current-password" minlength="10" maxlength="200" placeholder="Mínimo 10 caracteres">
       </label>
+      <div class="strength" id="auth-strength" data-nivel="0" hidden>
+        <div class="strength-bar" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <span id="auth-strength-text"></span>
+      </div>
+
+      <label class="field" id="auth-invite-field" hidden>
+        <span>Código de invitación</span>
+        <input id="auth-invite" type="text" autocomplete="off" spellcheck="false" maxlength="64" placeholder="Te lo da quien te invita">
+      </label>
+
       <label class="shared-check">
         <input type="checkbox" id="auth-shared">
-        <span>Este no es mi dispositivo <small>La sesión se cierra sola al cerrar la pestaña.</small></span>
+        <span>Este no es mi dispositivo <small>La sesión se cierra sola al cerrar la pestaña y a los 20 minutos sin usarla.</small></span>
       </label>
 
       <button id="auth-submit" class="btn btn-primary btn-lg btn-block" type="submit">Iniciar sesión</button>
+    </form>
+
+    <!-- El segundo paso. Solo aparece si la cuenta tiene activada la
+         verificación en dos pasos, y sustituye al formulario de arriba:
+         hasta que no se meta el código no se pinta ni un dato. -->
+    <form id="mfa-form" autocomplete="off" hidden>
+      <div class="mfa-head">
+        <span aria-hidden="true">🔐</span>
+        <h2>Un paso más</h2>
+        <p>Abre tu app de códigos y escribe el número de seis cifras que sale ahora mismo.</p>
+      </div>
+      <label class="field">
+        <span>Código</span>
+        <input id="mfa-code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6"
+               autocomplete="one-time-code" required placeholder="000000" class="code-input">
+      </label>
+      <button id="mfa-submit" class="btn btn-primary btn-lg btn-block" type="submit">Entrar</button>
+      <button id="mfa-cancel" class="btn-link" type="button">Usar otra cuenta</button>
     </form>
 
     <button id="forgot-password" class="btn-link" type="button">¿Has olvidado tu contraseña?</button>
@@ -533,6 +561,61 @@
           <a class="btn btn-ghost" id="ai-help" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">¿De dónde la saco?</a>
         </div>
         <p class="muted sm" id="ai-status"></p>
+      </div>
+
+      <div class="card form-card">
+        <header class="card-head"><span class="badge" aria-hidden="true">🔐</span><h2>Seguridad de tu cuenta</h2></header>
+        <p class="muted sm">La verificación en dos pasos es lo único que salva una cuenta cuando
+           alguien averigua la contraseña. Con ella puesta, saberla no le sirve de nada: hace falta
+           además el móvil que genera el código.</p>
+
+        <p id="sec-state" class="sec-state">Comprobando…</p>
+
+        <div class="composer-row">
+          <button class="btn btn-primary" id="sec-enable" type="button" hidden>Activar verificación en dos pasos</button>
+          <button class="btn btn-ghost danger" id="sec-disable" type="button" hidden>Desactivar</button>
+        </div>
+
+        <!-- El alta va en dos tiempos a propósito: el QR primero y el
+             código después. Si se activara de golpe y el móvil no hubiera
+             guardado bien el secreto, te quedarías fuera de tu cuenta. -->
+        <form id="sec-enroll" class="sec-enroll" hidden>
+          <ol class="sec-steps">
+            <li>Abre una app de códigos: Google Authenticator, Authy, 2FAS o la propia app Contraseñas del iPhone.</li>
+            <li>Escanea este cuadrado.</li>
+            <li>Escribe aquí el código de seis cifras que te dé.</li>
+          </ol>
+          <img id="sec-qr" class="sec-qr" alt="Código QR para tu app de verificación" width="180" height="180">
+          <p class="muted sm">¿No puedes escanearlo? Escribe esto a mano en la app:
+             <code id="sec-secret" class="sec-secret"></code></p>
+          <label class="field"><span>Código de seis cifras</span>
+            <input id="sec-code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6"
+                   autocomplete="one-time-code" required placeholder="000000" class="code-input">
+          </label>
+          <div class="composer-row">
+            <button class="btn btn-primary" type="submit">Confirmar y activar</button>
+            <button class="btn btn-ghost" id="sec-enroll-cancel" type="button">Cancelar</button>
+          </div>
+        </form>
+
+        <form id="password-form" class="sec-password" autocomplete="off">
+          <h3>Cambiar la contraseña</h3>
+          <div class="form-grid">
+            <label class="field"><span>Nueva</span>
+              <input id="password-new" type="password" autocomplete="new-password" minlength="10" maxlength="200" required placeholder="Mínimo 10 caracteres">
+            </label>
+            <label class="field"><span>Otra vez</span>
+              <input id="password-repeat" type="password" autocomplete="new-password" minlength="10" maxlength="200" required placeholder="Repítela">
+            </label>
+          </div>
+          <div class="strength" id="password-strength" data-nivel="0" hidden>
+            <div class="strength-bar" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+            <span id="password-strength-text"></span>
+          </div>
+          <button class="btn btn-primary" type="submit">Cambiar contraseña</button>
+        </form>
+
+        <p class="muted sm" id="sec-status" role="status"></p>
       </div>
 
       <div class="card form-card">

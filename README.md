@@ -689,6 +689,148 @@ antiframe (clickjacking), HSTS y `nosniff`. Están en
 **`web/seguridad-cabeceras.conf`** con las instrucciones de dónde
 pegarlas en DSM.
 
+## Segunda ronda de seguridad — registro, cuentas y cuota
+
+La primera ronda cerró lo que un atacante podía hacer **desde fuera**
+(inyecciones, robo de la clave de IA, clickjacking). Esta cierra las tres
+cosas que quedaban, que son las que importan cuando la app vive en una
+página web abierta a internet.
+
+### 1. Quién puede registrarse — y esto responde a lo de Android
+
+**Sí, la app va conectada a un servidor, y ese servidor ya existe: es
+Supabase.** No hace falta montar nada aparte. La diferencia es que la
+decisión de quién entra no se toma en la app, se toma en la base de
+datos — y eso vale igual para el iPhone, para Android y para el
+navegador, porque los tres hablan con el mismo sitio.
+
+Por qué no puede estar en la app: cualquiera abre las herramientas del
+navegador (o descompila el APK) y se salta la comprobación en diez
+segundos. En el servidor no hay nada que saltarse.
+
+Tres modos, y se cambian con una línea en el SQL Editor de Supabase:
+
+```sql
+update public.signup_control set mode = 'abierto';     -- cualquiera
+update public.signup_control set mode = 'invitacion';  -- solo los de la lista
+update public.signup_control set mode = 'cerrado';     -- nadie más
+```
+
+`'cerrado'` es el botón de pánico: si alguien se pone a crear cuentas en
+masa para llenarte la cuota, lo paras en cinco segundos y sin tocar ni
+una línea de código.
+
+En modo invitación, la lista se rellena así:
+
+```sql
+-- una persona concreta
+insert into public.allowed_signups (email, note)
+values ('amigo@correo.com', 'Clase de 1º');
+
+-- un código para treinta, que caduca en una semana
+insert into public.allowed_signups (code, max_uses, expires_at, note)
+values ('HABITIUM-2026', 30, now() + interval '7 days', 'Clase entera');
+```
+
+Quien lo hace cumplir es `habitium_check_signup`, un trigger sobre
+`auth.users` que se ejecuta **dentro** de la transacción que crea al
+usuario: si dice que no, el usuario no llega a existir. Las apps (web e
+iOS) mandan el código como metadato del registro y enseñan un mensaje
+decente, pero eso es cortesía: la que decide es la base de datos.
+
+Un detalle deliberado: la función `signup_mode()`, que es la única que
+la app puede llamar sin cuenta, **solo dice el modo**. Nunca confirma si
+un correo concreto está invitado ni si ya tiene cuenta. Si lo hiciera,
+Habitium se convertiría en una máquina de averiguar qué correos existen.
+
+### 2. Verificación en dos pasos (lo que evita que te roben la cuenta)
+
+RLS impide que una cuenta vea los datos de otra, y eso ya estaba. Lo que
+RLS **no** puede impedir es que alguien entre *siendo tú*: si averigua
+tu contraseña —normalmente porque la reutilizabas en otro sitio que tuvo
+una filtración— para el servidor es una sesión legítima.
+
+Ahora está en **Ajustes → Seguridad**, en los dos sitios:
+
+- **Web**: sale un QR y se escanea. El QR lo dibuja Supabase (viene como
+  SVG dentro de un `data:`), así que **no hay que cargar ninguna
+  librería de fuera** — y por tanto la Content-Security-Policy no se
+  toca. Eso no es casualidad, es por lo que se eligió ese camino.
+- **iPhone**: no hay QR, hay un botón que abre tu app de códigos
+  directamente con el enlace `otpauth://`. En un móvil un QR habría que
+  escanearlo con *otro* aparato; el enlace se abre de un toque.
+
+El alta va en dos tiempos (primero el secreto, después confirmarlo con
+un código) a propósito. Si se activara de golpe y la app de códigos no
+lo hubiera guardado bien, te quedarías fuera de tu propia cuenta sin
+forma de volver a entrar.
+
+Al entrar, la sesión se queda **a medias** hasta que entra el código:
+`SupabaseAuthManager.State.needsSecondFactor` en iOS, `continuarSesion()`
+en la web. Los dos comprueban **antes** de pintar, no después, para que
+no se vea ni un dato de refilón.
+
+### 3. Que una cuenta no pueda reventar la base de datos
+
+Esta era la brecha de verdad, y no se ve leyendo el código de la app:
+RLS impide que leas datos ajenos, pero no impide que metas basura en los
+**tuyos**. Con la clave pública (que es pública a propósito) y una cuenta
+creada, un script podía subir un campo `nombre` de 50 MB, o diez
+millones de filas, y dejar el proyecto sin cuota para todos.
+
+Dos cerrojos, los dos en el servidor:
+
+- **Tamaño por campo.** Un `CHECK` de longitud en los ~40 campos de
+  texto. Los límites se aplican por *nombre* de columna, así que una
+  tabla nueva con un `name` hereda el límite sin acordarse de nada.
+- **Filas por cuenta y tabla.** Un trigger `limite_de_filas` con un
+  techo generoso (50.000 comidas son más de treinta años apuntando cinco
+  al día). El truco está en cómo cuenta: `count(*)` recorrería la tabla
+  entera en cada INSERT, así que usa un subselect con `LIMIT` y Postgres
+  para de contar en cuanto llega al techo — coste constante.
+
+Y de propina: `anon` (el visitante sin cuenta) pierde el permiso de
+escritura sobre todas las tablas, y nadie puede crear tablas nuevas en
+`public`. Sin eso último, una cuenta cualquiera podía crear una tabla
+**sin RLS** y usar tu base de datos como almacén gratis.
+
+### 4. Lo pequeño que también cuenta
+
+- **Freno a los intentos.** Tres fallos gratis y después 5s, 15s, 45s,
+  2min, 5min. No para al que ataca el servidor desde fuera (para eso está
+  el límite de Supabase) sino al caso realista: alguien con tu móvil en la
+  mano. Media hora sin fallar borra el castigo.
+- **Nunca se dice si un correo existe.** Ni al iniciar sesión ("el correo
+  o la contraseña no son correctos", sin decir cuál) ni al recuperarla
+  ("si hay una cuenta con ese correo, te llegará un enlace").
+- **Cierre por inactividad** en dispositivo compartido: 20 minutos sin
+  tocar nada y fuera. El iPad del instituto era el caso que faltaba.
+- **Errores en cristiano.** El trigger del registro hace que Supabase
+  conteste "Database error saving new user", que no le dice nada a nadie.
+  `web/seguridad.js` y `friendlyMessage(for:)` lo traducen.
+
+### Cómo comprobar que todo está puesto
+
+Dos cosas distintas, y conviene no confundirlas:
+
+**En tu proyecto de verdad** — `supabase/comprobar-seguridad.sql` → SQL
+Editor → Run. No cambia nada: mira y contesta con ✓ o ✗. La comprobación
+8 es la que de verdad importa: se hace pasar por un usuario inventado e
+intenta leerlo todo, y si RLS funciona devuelve cero en todas las tablas.
+
+**En una base de usar y tirar** — `supabase/pruebas/` levanta un Postgres
+local, le aplica `schema.sql` tal cual y lo **ataca**: 28 intentos de
+leer datos ajenos, robar filas cambiándoles el dueño, auto-invitarse,
+inundar la base y colarse en el registro. Instrucciones en
+`supabase/pruebas/LEEME.md`. Todo esto ya se ejecutó contra un Postgres
+16 real antes de subirlo: **28 de 28**, y de paso salieron dos fallos que
+leyendo el SQL no se veían — una subconsulta dentro de un `CHECK` (que
+Postgres no admite y habría reventado al aplicar el esquema) y tres
+pruebas que daban aprobados falsos porque corrían sobre tablas vacías.
+
+Y del lado del navegador: `node --test web/*.test.mjs` (64 pruebas, 28 de
+ellas en `web/seguridad.test.mjs`).
+
 ## El aspecto (la capa del final de `web/styles.css`)
 
 Va al final del archivo a propósito: **redefine** lo de arriba sin

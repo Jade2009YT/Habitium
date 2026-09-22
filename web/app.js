@@ -32,6 +32,7 @@ import * as store from "./store.js";
 import * as player from "./player.js";
 import * as prog from "./progression.js";
 import * as study from "./study.js";
+import * as seg from "./seguridad.js";
 
 const cfg = window.HABITIUM_CONFIG;
 const isConfigured =
@@ -203,7 +204,9 @@ function setAuthMode(mode) {
   $("auth-submit").textContent = mode === "signin" ? "Iniciar sesión" : "Crear cuenta";
   $("auth-password").autocomplete = mode === "signin" ? "current-password" : "new-password";
   $("forgot-password").hidden = mode !== "signin";
+  if ($("auth-strength")) $("auth-strength").hidden = true;
   setAuthMessage("");
+  prepararRegistro();
 }
 
 function setAuthMessage(text, ok = false) {
@@ -215,33 +218,35 @@ function setAuthMessage(text, ok = false) {
 $("tab-signin").addEventListener("click", () => setAuthMode("signin"));
 $("tab-signup").addEventListener("click", () => setAuthMode("signup"));
 
-/** Las cien contraseñas que más se usan bastan para reventar una cuenta
- *  con un ataque automático. Aquí va una muestra corta con las que salen
- *  siempre en español y en inglés — no es una lista completa, es una red
- *  para que nadie use LA obvia. */
-const CONTRASENAS_MALAS = new Set([
-  "contrasena1", "contraseña1", "1234567890", "0123456789", "qwertyuiop",
-  "password12", "password123", "iloveyou12", "administrador", "habitium123",
-  "12345678910", "1234512345", "aaaaaaaaaa", "abcdefghij",
-]);
+// La barrita de fuerza, mientras se escribe. Solo aparece al crear la
+// cuenta: enseñársela a quien ya tiene una es decirle que la suya es mala
+// cuando ya no puede hacer nada al respecto desde ahí.
+$("auth-password").addEventListener("input", () => {
+  const barra = $("auth-strength");
+  if (!barra) return;
+  if (authMode !== "signup" || !$("auth-password").value) {
+    barra.hidden = true;
+    return;
+  }
+  const { nivel, texto } = seg.fuerzaContrasena($("auth-password").value, $("auth-email").value);
+  barra.hidden = false;
+  barra.dataset.nivel = String(nivel);
+  $("auth-strength-text").textContent = texto;
+});
 
-/** Devuelve un motivo si la contraseña no vale, o null si está bien.
- *
- *  Diez caracteres y nada de reglas de "una mayúscula y un símbolo":
- *  esas reglas empujan a la gente a poner "Contraseña1!" —que es de las
- *  primeras que prueba cualquier ataque— mientras que la longitud sí
- *  multiplica de verdad el tiempo que cuesta romperla. */
-function problemaContrasena(password, email) {
-  if (password.length < 10) return "La contraseña necesita al menos 10 caracteres.";
-  if (CONTRASENAS_MALAS.has(password.toLowerCase())) {
-    return "Esa contraseña está entre las más usadas del mundo. Pon otra.";
+// Si el registro está por invitación, el campo del código aparece solo.
+// Si está cerrado, ni se deja intentarlo.
+async function prepararRegistro() {
+  const modo = await seg.modoDeRegistro(supabase);
+  const campo = $("auth-invite-field");
+  if (campo) campo.hidden = !(authMode === "signup" && modo === "invitacion");
+
+  if (authMode === "signup" && modo === "cerrado") {
+    $("auth-submit").disabled = true;
+    setAuthMessage("El registro está cerrado ahora mismo. Si ya tienes cuenta, inicia sesión.");
+  } else {
+    $("auth-submit").disabled = false;
   }
-  const usuario = String(email).split("@")[0].toLowerCase();
-  if (usuario.length >= 4 && password.toLowerCase().includes(usuario)) {
-    return "No uses tu correo dentro de la contraseña.";
-  }
-  if (/^(.)\1+$/.test(password)) return "Repetir la misma letra no es una contraseña.";
-  return null;
 }
 
 $("auth-form").addEventListener("submit", async (e) => {
@@ -253,8 +258,21 @@ $("auth-form").addEventListener("submit", async (e) => {
   // Solo al crear la cuenta: a quien ya tiene una con la contraseña
   // antigua no se le puede dejar fuera de su propia app.
   if (authMode === "signup") {
-    const problema = problemaContrasena(password, email);
+    const problema = seg.problemaContrasena(password, email);
     if (problema) return setAuthMessage(problema);
+  }
+
+  // El freno a los intentos a lo bruto. Va ANTES de tocar la red: si hay
+  // que esperar, ni se molesta al servidor.
+  if (authMode === "signin") {
+    const espera = seg.esperaPendiente(email);
+    if (espera > 0) {
+      return setAuthMessage(
+        espera >= 60
+          ? `Demasiados intentos. Espera ${Math.ceil(espera / 60)} minuto${espera >= 120 ? "s" : ""}.`
+          : `Demasiados intentos. Espera ${espera} segundo${espera === 1 ? "" : "s"}.`
+      );
+    }
   }
 
   // Se recuerda la elección ANTES de entrar: al recargar, el cliente ya
@@ -267,13 +285,27 @@ $("auth-form").addEventListener("submit", async (e) => {
   submit.disabled = true;
   setAuthMessage("");
 
+  const codigo = seg.limpiarCodigo($("auth-invite")?.value);
   const { data, error } =
     authMode === "signup"
-      ? await supabase.auth.signUp({ email, password })
+      ? await supabase.auth.signUp({
+          email,
+          password,
+          // Esto viaja al portero del registro (el trigger de auth.users).
+          // Quien lo quite desde el navegador no se cuela: lo único que
+          // consigue es que el servidor le diga que no.
+          options: codigo ? { data: { invite_code: codigo } } : undefined,
+        })
       : await supabase.auth.signInWithPassword({ email, password });
 
   submit.disabled = false;
-  if (error) return setAuthMessage(error.message);
+
+  if (error) {
+    if (authMode === "signin") seg.apuntarFallo(email);
+    return setAuthMessage(seg.mensajeDeError(error));
+  }
+
+  seg.limpiarFallos(email);
 
   if (authMode === "signup" && !data.session) {
     setAuthMessage(`Te hemos enviado un enlace a ${email}. Ábrelo y vuelve aquí.`, true);
@@ -286,10 +318,73 @@ $("forgot-password").addEventListener("click", async () => {
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: window.location.href,
   });
+  // Da igual si el correo existe o no: la respuesta es siempre la misma.
+  // Contestar "ese correo no está registrado" sería regalar una forma de
+  // averiguar quién tiene cuenta aquí.
   setAuthMessage(
-    error ? error.message : "Te hemos enviado un enlace para restablecer tu contraseña.",
-    !error
+    error && /rate limit|too many/i.test(error.message ?? "")
+      ? seg.mensajeDeError(error)
+      : "Si hay una cuenta con ese correo, te llegará un enlace en un minuto.",
+    true
   );
+});
+
+// ── El segundo paso, al entrar ──────────────────────────────────────
+//
+// Cuando la cuenta tiene verificación en dos pasos, Supabase da una
+// sesión "a medias" (aal1) en cuanto la contraseña es correcta. Con esa
+// sesión NO se pueden leer datos protegidos, pero la app tiene que
+// enterarse y pedir el código en vez de enseñar la pantalla de inicio.
+
+function mostrarSegundoPaso() {
+  $("boot").hidden = true;
+  $("app").hidden = true;
+  $("auth-screen").hidden = false;
+  $("auth-form").hidden = true;
+  $("auth-tabs").hidden = true;
+  $("forgot-password").hidden = true;
+  $("mfa-form").hidden = false;
+  setAuthMessage("");
+  $("mfa-code").value = "";
+  setTimeout(() => $("mfa-code").focus(), 50);
+}
+
+function ocultarSegundoPaso() {
+  $("mfa-form").hidden = true;
+  $("auth-form").hidden = false;
+  $("auth-tabs").hidden = false;
+  $("forgot-password").hidden = authMode !== "signin";
+}
+
+$("mfa-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const boton = $("mfa-submit");
+  const codigo = $("mfa-code").value;
+
+  // El mismo freno que en la contraseña: seis cifras son un millón de
+  // combinaciones, y sin freno un script las prueba todas.
+  const espera = seg.esperaPendiente("mfa");
+  if (espera > 0) return setAuthMessage(`Demasiados intentos. Espera ${espera} segundos.`);
+
+  boton.disabled = true;
+  setAuthMessage("");
+  try {
+    await seg.verificarSegundoFactor(supabase, codigo);
+    seg.limpiarFallos("mfa");
+    ocultarSegundoPaso();
+    await showApp();
+  } catch (error) {
+    seg.apuntarFallo("mfa");
+    setAuthMessage(seg.mensajeDeError(error));
+    $("mfa-code").value = "";
+  } finally {
+    boton.disabled = false;
+  }
+});
+
+$("mfa-cancel").addEventListener("click", async () => {
+  ocultarSegundoPaso();
+  await supabase.auth.signOut();
 });
 
 async function doSignOut() {
@@ -1042,6 +1137,7 @@ async function loadSettings() {
 
   renderAccentPicker();
   renderAIKey();
+  renderSeguridad();
 
   const { data } = await supabase.auth.getUser();
   $("settings-email").textContent = data?.user?.email ?? "";
@@ -1604,6 +1700,139 @@ $("ai-clear")?.addEventListener("click", () => {
   renderAIKey();
 });
 
+// ── Ajustes → Seguridad ─────────────────────────────────────────────
+//
+// Dos cosas, y las dos son las que de verdad evitan que te roben la
+// cuenta: la verificación en dos pasos y poder cambiar la contraseña sin
+// pasar por el correo.
+//
+// Lo del alta en dos tiempos (primero el QR, después confirmarlo con un
+// código) no es burocracia: si se activara de golpe y el móvil no hubiera
+// guardado bien el secreto, te quedarías fuera de tu propia cuenta sin
+// forma de volver a entrar.
+
+let altaMFA = null;   // { factorId, qr, secreto } mientras se está dando de alta
+
+function mensajeSeguridad(texto, ok = false) {
+  const el = $("sec-status");
+  if (!el) return;
+  el.textContent = texto;
+  el.classList.toggle("is-ok", ok);
+}
+
+async function renderSeguridad() {
+  if (!$("sec-state")) return;
+  let factores = [];
+  try {
+    factores = await seg.factoresActivos(supabase);
+  } catch (e) {
+    $("sec-state").textContent = "No se ha podido comprobar (sin conexión).";
+    return;
+  }
+
+  const activa = factores.length > 0;
+  $("sec-state").textContent = activa
+    ? "Activada. Para entrar hacen falta la contraseña y el código de tu móvil."
+    : "Desactivada. Ahora mismo basta con tu contraseña para entrar.";
+  $("sec-state").classList.toggle("is-ok", activa);
+  $("sec-enable").hidden = activa || !!altaMFA;
+  $("sec-disable").hidden = !activa;
+  $("sec-enroll").hidden = !altaMFA;
+  $("sec-disable").dataset.factor = activa ? factores[0].id : "";
+}
+
+$("sec-enable")?.addEventListener("click", async () => {
+  mensajeSeguridad("");
+  $("sec-enable").disabled = true;
+  try {
+    altaMFA = await seg.empezarAltaMFA(supabase);
+    // El QR viene ya dibujado desde Supabase (un SVG dentro de un data:).
+    // Por eso no hace falta ninguna librería de fuera — y por eso la
+    // Content-Security-Policy se queda como está.
+    $("sec-qr").src = altaMFA.qr;
+    $("sec-secret").textContent = altaMFA.secreto;
+    $("sec-code").value = "";
+    await renderSeguridad();
+    $("sec-code").focus();
+  } catch (error) {
+    mensajeSeguridad(seg.mensajeDeError(error));
+  } finally {
+    $("sec-enable").disabled = false;
+  }
+});
+
+$("sec-enroll")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!altaMFA) return;
+  mensajeSeguridad("");
+  try {
+    await seg.confirmarAltaMFA(supabase, altaMFA.factorId, $("sec-code").value);
+    altaMFA = null;
+    $("sec-qr").src = "";
+    $("sec-secret").textContent = "";
+    await renderSeguridad();
+    mensajeSeguridad("Listo. A partir de ahora te pedirá el código al entrar.", true);
+  } catch (error) {
+    mensajeSeguridad(seg.mensajeDeError(error));
+  }
+});
+
+$("sec-enroll-cancel")?.addEventListener("click", async () => {
+  // Cancelar tiene que DESHACER el alta en el servidor. Si solo se
+  // ocultara el formulario quedaría un factor a medias dando guerra la
+  // próxima vez que se intente activar.
+  if (altaMFA) {
+    try { await seg.quitarMFA(supabase, altaMFA.factorId); } catch (e) {}
+    altaMFA = null;
+  }
+  $("sec-qr").src = "";
+  $("sec-secret").textContent = "";
+  await renderSeguridad();
+  mensajeSeguridad("");
+});
+
+$("sec-disable")?.addEventListener("click", async () => {
+  const id = $("sec-disable").dataset.factor;
+  if (!id) return;
+  if (!confirm("¿Seguro? Sin verificación en dos pasos, quien sepa tu contraseña entra en tu cuenta.")) return;
+  try {
+    await seg.quitarMFA(supabase, id);
+    await renderSeguridad();
+    mensajeSeguridad("Verificación en dos pasos desactivada.");
+  } catch (error) {
+    mensajeSeguridad(seg.mensajeDeError(error));
+  }
+});
+
+$("password-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const nueva = $("password-new").value;
+  const repetida = $("password-repeat").value;
+  const email = $("side-email").textContent;
+
+  if (nueva !== repetida) return mensajeSeguridad("Las dos contraseñas no son iguales.");
+  const problema = seg.problemaContrasena(nueva, email);
+  if (problema) return mensajeSeguridad(problema);
+
+  const { error } = await supabase.auth.updateUser({ password: nueva });
+  if (error) return mensajeSeguridad(seg.mensajeDeError(error));
+
+  $("password-new").value = "";
+  $("password-repeat").value = "";
+  mensajeSeguridad("Contraseña cambiada. Las sesiones de otros dispositivos seguirán abiertas hasta que cierres sesión en ellos.", true);
+});
+
+$("password-new")?.addEventListener("input", () => {
+  const barra = $("password-strength");
+  if (!barra) return;
+  const valor = $("password-new").value;
+  barra.hidden = !valor;
+  if (!valor) return;
+  const { nivel, texto } = seg.fuerzaContrasena(valor, $("side-email").textContent);
+  barra.dataset.nivel = String(nivel);
+  $("password-strength-text").textContent = texto;
+});
+
 // ── Estudios ────────────────────────────────────────────────────────
 //
 // El módulo que cierra la idea original del sistema de niveles: "cada
@@ -2075,18 +2304,44 @@ renderBackgroundPicker();
 updateThemeColor(currentBackground());
 applyAccent(currentAccent());
 
+/** La puerta. Tener sesión NO es lo mismo que poder entrar: si la cuenta
+ *  tiene verificación en dos pasos, Supabase entrega una sesión a medias
+ *  en cuanto la contraseña es correcta, y aquí es donde se corta.
+ *
+ *  El orden importa: primero se comprueba, y SOLO después se pinta.
+ *  Al revés se vería la pantalla de inicio un instante antes de tapar. */
+async function continuarSesion() {
+  try {
+    if (await seg.faltaSegundoFactor(supabase)) return mostrarSegundoPaso();
+  } catch (error) {
+    console.warn("mfa:", error);
+  }
+  ocultarSegundoPaso();
+  await showApp();
+}
+
 supabase.auth.onAuthStateChange((_event, session) => {
-  if (session) showApp();
+  if (session) continuarSesion();
   else {
+    ocultarSegundoPaso();
     showAuth();
     setAuthMessage("");
   }
 });
+
+// En un dispositivo prestado —el iPad del instituto— la sesión se cierra
+// sola a los veinte minutos sin tocar nada. En el tuyo no, claro.
+if (dispositivoAjeno) {
+  seg.vigilarInactividad(20, async () => {
+    await doSignOut();
+    setAuthMessage("Sesión cerrada por seguridad: llevabas un rato sin usarla.");
+  });
+}
 
 // Sesión inicial: onAuthStateChange también dispara al arrancar, pero
 // comprobarlo aquí evita el parpadeo de la pantalla de carga.
 const {
   data: { session },
 } = await supabase.auth.getSession();
-if (session) showApp();
+if (session) continuarSesion();
 else showAuth();

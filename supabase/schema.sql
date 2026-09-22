@@ -399,3 +399,385 @@ create index if not exists weight_entries_user_date_idx on public.weight_entries
 create index if not exists xp_events_user_date_idx on public.xp_events (user_id, date);
 create index if not exists grades_user_subject_idx on public.grades (user_id, subject_id);
 create index if not exists study_events_user_date_idx on public.study_events (user_id, date);
+
+-- =========================================================================
+-- SEGURIDAD (segunda ronda)
+--
+-- Lo de arriba ya impide que una cuenta vea los datos de otra: eso lo hace
+-- RLS, y es la parte más importante. Lo que viene ahora cubre las otras
+-- tres cosas que se pueden atacar en una app que vive en una página web:
+--
+--   A. Quién puede registrarse            → signup_control + allowed_signups
+--   B. Que nadie te reviente la cuenta    → MFA (se activa en Ajustes) y,
+--                                           aquí abajo, el candado del
+--                                           registro y los límites
+--   C. Que nadie te reviente la base      → límites de tamaño y de filas
+--
+-- IMPORTANTE: esto se aplica igual en iPhone, en Android y en el navegador,
+-- porque no está en la app — está en el servidor. Una app se puede
+-- modificar (basta con abrir las herramientas del navegador); esto no.
+-- =========================================================================
+
+-- ── A. Control de registro ──────────────────────────────────────────────
+--
+-- Tres modos. Se cambia con una línea de SQL y tiene efecto inmediato en
+-- todas las plataformas a la vez:
+--
+--   update public.signup_control set mode = 'cerrado';      -- nadie más
+--   update public.signup_control set mode = 'invitacion';   -- solo lista
+--   update public.signup_control set mode = 'abierto';      -- cualquiera
+--
+-- 'cerrado' es el botón de pánico: si un día alguien se pone a crear
+-- cuentas en masa para llenarte la base, lo paras en cinco segundos.
+
+create table if not exists public.signup_control (
+  id boolean primary key default true check (id),   -- fuerza UNA sola fila
+  mode text not null default 'invitacion'
+    check (mode in ('abierto', 'invitacion', 'cerrado')),
+  updated_at timestamptz not null default now()
+);
+
+insert into public.signup_control (id, mode)
+values (true, 'invitacion')
+on conflict (id) do nothing;
+
+-- La lista de quién puede entrar. Una fila vale por correo, por código, o
+-- por los dos a la vez:
+--
+--   -- invitar a una persona concreta
+--   insert into public.allowed_signups (email, note)
+--   values ('amigo@correo.com', 'Clase de 1º');
+--
+--   -- un código que sirva para 30 personas y caduque en una semana
+--   insert into public.allowed_signups (code, max_uses, expires_at, note)
+--   values ('HABITIUM-2026', 30, now() + interval '7 days', 'Clase entera');
+--
+-- El código va en texto plano a propósito: no es una contraseña, es un
+-- cupón. Nadie que no seas tú puede leer esta tabla (ver los REVOKE del
+-- final), así que verlo desde el panel de Supabase compensa.
+create table if not exists public.allowed_signups (
+  id uuid primary key default gen_random_uuid(),
+  email text,
+  code text,
+  max_uses integer not null default 1 check (max_uses > 0),
+  uses integer not null default 0 check (uses >= 0),
+  expires_at timestamptz,
+  note text,
+  created_at timestamptz not null default now(),
+  check (email is not null or code is not null)
+);
+
+-- Comparar correos sin distinguir mayúsculas, y sin que se pueda invitar
+-- dos veces al mismo.
+create unique index if not exists allowed_signups_email_idx
+  on public.allowed_signups (lower(email)) where email is not null;
+create unique index if not exists allowed_signups_code_idx
+  on public.allowed_signups (upper(code)) where code is not null;
+
+-- El portero. Se ejecuta DENTRO de la transacción que crea el usuario, así
+-- que si levanta la mano el usuario no llega a existir.
+--
+-- `security definer` = corre con los permisos del dueño de la función (tú),
+-- no con los de quien se registra. Por eso puede leer allowed_signups
+-- aunque el que se registra no tenga ningún permiso sobre ella.
+-- `search_path` fijo: sin eso, alguien que pudiera crear un esquema propio
+-- podría colar su propia tabla `allowed_signups` delante de la tuya.
+create or replace function public.check_signup_allowed()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  modo text;
+  codigo text;
+  invitacion public.allowed_signups%rowtype;
+begin
+  select mode into modo from public.signup_control where id;
+  modo := coalesce(modo, 'abierto');
+
+  if modo = 'abierto' then
+    return new;
+  end if;
+
+  if modo = 'cerrado' then
+    raise exception 'HABITIUM_REGISTRO_CERRADO'
+      using hint = 'El registro está cerrado ahora mismo.';
+  end if;
+
+  -- modo = 'invitacion'
+  codigo := nullif(trim(coalesce(new.raw_user_meta_data ->> 'invite_code', '')), '');
+
+  select * into invitacion
+  from public.allowed_signups a
+  where (a.email is not null and lower(a.email) = lower(new.email))
+     or (codigo is not null and a.code is not null and upper(a.code) = upper(codigo))
+  order by (a.email is not null) desc          -- una invitación nominal manda
+  limit 1
+  for update;
+
+  if not found then
+    raise exception 'HABITIUM_SIN_INVITACION'
+      using hint = 'Ese correo no está invitado y el código no vale.';
+  end if;
+
+  if invitacion.expires_at is not null and invitacion.expires_at < now() then
+    raise exception 'HABITIUM_INVITACION_CADUCADA'
+      using hint = 'Esa invitación ya ha caducado.';
+  end if;
+
+  if invitacion.uses >= invitacion.max_uses then
+    raise exception 'HABITIUM_INVITACION_AGOTADA'
+      using hint = 'Esa invitación ya se ha usado.';
+  end if;
+
+  update public.allowed_signups
+     set uses = uses + 1
+   where id = invitacion.id;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists habitium_check_signup on auth.users;
+create trigger habitium_check_signup
+  before insert on auth.users
+  for each row execute function public.check_signup_allowed();
+
+-- Para que la app pueda enseñar un mensaje decente ANTES de intentarlo (y
+-- pedir el código solo cuando hace falta), sin convertirse en un chivato:
+-- esta función dice el modo, nada más. No confirma si un correo concreto
+-- está invitado ni si ya existe una cuenta con él — eso sería regalarle a
+-- cualquiera una lista de correos válidos.
+create or replace function public.signup_mode()
+returns text
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select coalesce((select mode from public.signup_control where id), 'abierto');
+$$;
+
+-- ── B. Nadie, absolutamente nadie, toca las tablas de control ───────────
+--
+-- Supabase da permisos a `anon` y `authenticated` sobre lo que hay en
+-- `public` por defecto. En las tablas de datos eso da igual porque RLS
+-- filtra por auth.uid(). Aquí no hay user_id que filtrar, así que el
+-- permiso se quita a mano. Con RLS activado y CERO políticas, el resultado
+-- es el mismo desde los dos lados: invisible.
+alter table public.signup_control  enable row level security;
+alter table public.allowed_signups enable row level security;
+
+revoke all on public.signup_control  from anon, authenticated;
+revoke all on public.allowed_signups from anon, authenticated;
+
+-- signup_mode() sí es pública (la app la llama antes de registrarte).
+-- check_signup_allowed() NO: solo la llama el trigger.
+revoke all on function public.check_signup_allowed() from public, anon, authenticated;
+grant execute on function public.signup_mode() to anon, authenticated;
+
+-- ── C. Que una cuenta no pueda reventar la base de datos ────────────────
+--
+-- Esto es lo que quedaba abierto de verdad. RLS impide que leas datos
+-- ajenos, pero no impide que metas basura en los TUYOS: con la clave
+-- pública (que es pública a propósito) y una cuenta creada, un script
+-- puede subir un campo "nombre" de 50 MB, o diez millones de filas, y
+-- dejar el proyecto sin cuota para todos.
+--
+-- Dos cerrojos: tamaño por campo y número de filas por tabla.
+
+-- C.1 — Tamaño máximo de cada campo de texto.
+--
+-- Los límites se ponen por NOMBRE de columna, no tabla por tabla: así una
+-- tabla nueva que tenga un `name` hereda el límite sin tener que acordarse.
+do $$
+declare
+  t text;
+  c record;
+  limite integer;
+  nombre text;
+  tablas text[] := array[
+    'food_entries', 'nutrition_goals', 'weight_entries',
+    'planner_tasks', 'planner_events', 'planner_notes',
+    'transactions', 'budget_settings', 'category_budgets', 'recurring_transactions',
+    'medications', 'medication_dose_logs',
+    'habits', 'habit_logs', 'workout_sets',
+    'player_profiles', 'xp_events',
+    'subjects', 'grades', 'study_events',
+    'user_settings'
+  ];
+begin
+  foreach t in array tablas loop
+    for c in
+      select column_name
+      from information_schema.columns
+      where table_schema = 'public' and table_name = t and data_type = 'text'
+    loop
+      limite := case c.column_name
+        when 'notes'        then 4000
+        when 'note'         then 2000
+        when 'text'         then 8000   -- planner_notes: la nota del día
+        when 'name'         then 120
+        when 'title'        then 200
+        when 'exercise_name' then 120
+        when 'display_name' then 80
+        when 'email'        then 320    -- el máximo real de un correo
+        when 'teacher'      then 120
+        when 'location'     then 200
+        when 'dosage'       then 120
+        when 'unit'         then 32
+        when 'icon'         then 16     -- un emoji, no un archivo
+        when 'color'        then 32
+        when 'currency_code' then 8
+        when 'symbol_name'  then 80
+        when 'dedupe_key'   then 160
+        when 'season_id'    then 32
+        else 64                         -- kind, type, source, category, priority…
+      end;
+
+      nombre := format('%s_%s_len', t, c.column_name);
+      begin
+        execute format(
+          'alter table public.%I add constraint %I check (char_length(%I) <= %s)',
+          t, nombre, c.column_name, limite
+        );
+      exception
+        when duplicate_object then null;   -- ya estaba puesto
+        when check_violation then
+          raise notice 'Hay datos que pasan del límite en %.% — revísalos antes', t, c.column_name;
+      end;
+    end loop;
+  end loop;
+end $$;
+
+-- El único array de texto que hay. Sin esto, `unlocked_reward_ids` acepta
+-- un array de un millón de cadenas y es el camino más corto para llenar
+-- la base desde una sola fila.
+--
+-- Ojo con cómo está escrito: lo natural sería mirar el elemento más largo
+-- con `(select max(char_length(x)) from unnest(...) x)`, pero Postgres NO
+-- admite subconsultas dentro de un CHECK y la sentencia falla al
+-- aplicarla. `array_to_string` hace el mismo trabajo sin subconsulta:
+-- pega todo el array en un texto y mide ese texto, que es justo lo que
+-- interesa limitar (el tamaño total que ocupa la fila).
+do $$
+begin
+  alter table public.player_profiles
+    add constraint player_profiles_rewards_len
+    check (
+      array_length(unlocked_reward_ids, 1) is null
+      or (array_length(unlocked_reward_ids, 1) <= 200
+          and char_length(array_to_string(unlocked_reward_ids, ',')) <= 4000)
+    );
+exception when duplicate_object then null;
+end $$;
+
+-- Y los minutos de recordatorio de una medicación: 1440 minutos tiene el
+-- día, así que más de 48 avisos ya no es un uso, es un ataque.
+do $$
+begin
+  alter table public.medications
+    add constraint medications_reminders_len
+    check (
+      array_length(reminder_minutes_since_midnight, 1) is null
+      or array_length(reminder_minutes_since_midnight, 1) <= 48
+    );
+exception when duplicate_object then null;
+end $$;
+
+-- C.2 — Número máximo de filas por cuenta y tabla.
+--
+-- El truco está en cómo se cuenta: `count(*)` sobre una tabla enorme la
+-- recorre entera y haría lento cada INSERT. Con el subselect + LIMIT,
+-- Postgres para de contar en cuanto llega al límite, así que el coste es
+-- constante y no crece con los datos.
+create or replace function public.limite_de_filas()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  maximo integer := TG_ARGV[0]::integer;
+  cuantas integer;
+begin
+  execute format(
+    'select count(*) from (select 1 from public.%I where user_id = $1 limit %s) s',
+    TG_TABLE_NAME, maximo
+  ) into cuantas using new.user_id;
+
+  if cuantas >= maximo then
+    raise exception 'HABITIUM_LIMITE_FILAS'
+      using hint = format('Has llegado al máximo de filas en %s (%s).', TG_TABLE_NAME, maximo);
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.limite_de_filas() from public, anon, authenticated;
+
+-- Los números son generosos a propósito: 50.000 comidas son más de treinta
+-- años apuntando cinco al día. Si alguna vez te quedas corto, súbelos —
+-- pero que exista un techo es lo que impide que una cuenta robada te deje
+-- el proyecto sin cuota en una tarde.
+do $$
+declare
+  par record;
+begin
+  for par in
+    select * from (values
+      ('food_entries', 50000), ('weight_entries', 20000),
+      ('planner_tasks', 50000), ('planner_events', 50000), ('planner_notes', 20000),
+      ('transactions', 50000), ('category_budgets', 200), ('recurring_transactions', 200),
+      ('medications', 200), ('medication_dose_logs', 100000),
+      ('habits', 200), ('habit_logs', 100000),
+      ('workout_sets', 100000),
+      ('xp_events', 100000),
+      ('subjects', 100), ('grades', 5000), ('study_events', 5000)
+    ) as v(tabla, maximo)
+  loop
+    execute format('drop trigger if exists %I on public.%I',
+                   par.tabla || '_limite', par.tabla);
+    execute format(
+      'create trigger %I before insert on public.%I for each row execute function public.limite_de_filas(%s)',
+      par.tabla || '_limite', par.tabla, par.maximo
+    );
+  end loop;
+end $$;
+
+-- Índices que los límites de arriba necesitan para ser baratos.
+create index if not exists subjects_user_idx  on public.subjects (user_id);
+create index if not exists habits_user_idx    on public.habits (user_id);
+create index if not exists medications_user_idx on public.medications (user_id);
+create index if not exists category_budgets_user_idx on public.category_budgets (user_id);
+create index if not exists recurring_transactions_user_idx on public.recurring_transactions (user_id);
+
+-- ── D. Higiene de permisos ──────────────────────────────────────────────
+--
+-- `anon` (el visitante sin cuenta) no tiene por qué poder escribir NADA.
+-- RLS ya lo bloquea, pero quitarle el permiso además es cinturón y
+-- tirantes: si algún día una política se escribe mal, `anon` sigue sin
+-- poder tocar nada.
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'food_entries', 'nutrition_goals', 'weight_entries',
+    'planner_tasks', 'planner_events', 'planner_notes',
+    'transactions', 'budget_settings', 'category_budgets', 'recurring_transactions',
+    'medications', 'medication_dose_logs',
+    'habits', 'habit_logs', 'workout_sets',
+    'player_profiles', 'xp_events',
+    'subjects', 'grades', 'study_events',
+    'user_settings'
+  ] loop
+    execute format('revoke all on public.%I from anon', t);
+  end loop;
+end $$;
+
+-- Y nadie puede crear tablas nuevas en `public` salvo el dueño. Sin esto,
+-- una cuenta cualquiera puede crear una tabla SIN RLS y usar tu base de
+-- datos como almacén gratis.
+revoke create on schema public from public, anon, authenticated;

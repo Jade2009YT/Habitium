@@ -21,7 +21,7 @@
 // Al cambiar los archivos de la app, sube también este archivo con
 // CACHE_VERSION incrementado — así se limpian las cachés antiguas.
 
-const CACHE_VERSION = "habitium-v5";
+const CACHE_VERSION = "habitium-v6";
 
 const SHELL = [
   "./",
@@ -35,6 +35,7 @@ const SHELL = [
   "./progression.js",
   "./player.js",
   "./study.js",
+  "./seguridad.js",
   "./config.js",
   "./manifest.webmanifest",
   "./icon.png",

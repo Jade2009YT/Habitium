@@ -202,10 +202,21 @@ struct SettingsView: View {
     private var securitySection: some View {
         Section {
             Toggle("Bloqueo con \(lockManager.biometryDescription)", isOn: Bindable(lockManager).isEnabled)
+
+            // Solo tiene sentido con cuenta de correo: con Sign in with
+            // Apple el segundo factor lo pone Apple, y sin cuenta no hay
+            // nada que proteger en la nube porque no hay nube.
+            if emailAuth.isSignedIn {
+                NavigationLink {
+                    AccountSecurityView()
+                } label: {
+                    Label("Verificación en dos pasos", systemImage: "lock.shield")
+                }
+            }
         } header: {
             Text("Seguridad")
         } footer: {
-            Text("Con esto activado, Habitium te pide \(lockManager.biometryDescription) cada vez que abres la app o vuelves de segundo plano — además de haber iniciado sesión. Tus fotos de comida y el resto de datos también se guardan cifrados en el dispositivo.")
+            Text("El bloqueo con \(lockManager.biometryDescription) protege este iPhone: te lo pide cada vez que abres la app. La verificación en dos pasos protege tu cuenta esté donde esté — con ella puesta, saber tu contraseña no le sirve de nada a nadie. Tus fotos de comida y el resto de datos también se guardan cifrados en el dispositivo.")
         }
     }
 

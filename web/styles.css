@@ -2028,3 +2028,114 @@ input[type="color"] { min-height: 0; padding: 0; }
 }
 .shared-check input { flex: 0 0 auto; margin-top: 2px; }
 .shared-check small { display: block; font-size: 12px; color: var(--text-3); }
+
+/* ═══ SEGURIDAD ══════════════════════════════════════════════════════
+   La barrita de fuerza, el segundo paso al entrar y la tarjeta de
+   Ajustes → Seguridad. */
+
+.strength { display: grid; gap: 6px; margin: -4px 0 4px; }
+.strength-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.strength-bar i {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+  transition: background 220ms ease;
+}
+.strength > span { font-size: 12px; font-weight: 600; color: var(--text-3); }
+
+/* Cada nivel enciende un trozo más y cambia de color. Los selectores van
+   de menos a más para que el último gane sin !important. */
+.strength[data-nivel="1"] .strength-bar i:nth-child(-n+1) { background: var(--red); }
+.strength[data-nivel="2"] .strength-bar i:nth-child(-n+2) { background: var(--orange); }
+.strength[data-nivel="3"] .strength-bar i:nth-child(-n+3) { background: #ca8a04; }
+.strength[data-nivel="4"] .strength-bar i { background: var(--green); }
+.strength[data-nivel="1"] > span { color: var(--red); }
+.strength[data-nivel="2"] > span { color: var(--orange); }
+.strength[data-nivel="3"] > span { color: #ca8a04; }
+.strength[data-nivel="4"] > span { color: var(--green); }
+
+/* Los seis dígitos: grandes, monoespaciados y separados, que se lean de
+   una pasada mientras se copian del móvil. */
+.code-input {
+  font: 600 24px/1 ui-monospace, "SF Mono", Menlo, monospace;
+  letter-spacing: 0.4em;
+  text-align: center;
+  padding-left: 0.4em;   /* compensa el hueco que el letter-spacing deja a la derecha */
+}
+
+.mfa-head { text-align: center; display: grid; gap: 6px; margin-bottom: 18px; }
+.mfa-head span { font-size: 34px; line-height: 1; }
+.mfa-head h2 { font-size: 20px; margin: 0; }
+.mfa-head p { margin: 0; font-size: 14px; color: var(--text-2); }
+#mfa-form { display: grid; gap: 14px; }
+
+.sec-state {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.sec-state.is-ok {
+  background: var(--green-soft);
+  border-color: transparent;
+  color: var(--green);
+}
+
+/* El contenedor de la tarjeta usa justify-items: start, que encoge a sus
+   hijos hasta el ancho de su contenido. Sin este width los formularios
+   salen estrechos y pegados a la izquierda. */
+.sec-enroll, .sec-password, #password-form .form-grid { width: 100%; }
+
+.sec-enroll {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+  padding: 18px;
+  border-radius: var(--r);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.sec-enroll > .field, .sec-enroll > .composer-row { width: 100%; }
+.sec-steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 14px; color: var(--text-2); }
+
+/* El QR viene de Supabase como un SVG dentro de un data:, así que se
+   escala sin pixelarse. El fondo blanco es obligatorio: sobre fondo
+   oscuro las cámaras no lo leen. */
+.sec-qr {
+  width: 180px; height: 180px;
+  background: #fff;
+  padding: 10px;
+  border-radius: var(--r-sm);
+  align-self: center;
+  justify-self: center;
+}
+.sec-secret {
+  font: 600 13px/1.6 ui-monospace, "SF Mono", Menlo, monospace;
+  letter-spacing: 0.08em;
+  word-break: break-all;
+  user-select: all;          /* un toque lo selecciona entero para copiarlo */
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+.sec-password { display: grid; gap: 14px; justify-items: start; margin-top: 4px; }
+.sec-password > .form-grid, .sec-password > .strength { width: 100%; }
+.sec-password h3 {
+  margin: 0;
+  font-size: 15px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  width: 100%;
+}
+
+.btn-ghost.danger { color: var(--red); }
+.btn-ghost.danger:hover { background: var(--red-soft); }
+
+#sec-status:empty { display: none; }
+#sec-status.is-ok { color: var(--green); font-weight: 600; }
