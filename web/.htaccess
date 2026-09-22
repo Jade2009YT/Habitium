@@ -1,0 +1,74 @@
+# Habitium en Web Station (Synology) con Apache.
+#
+# Copia este archivo junto al resto de web/ en la carpeta del host
+# virtual. Solo funciona si Web Station tiene Apache como backend: si
+# usas Nginx, .htaccess se ignora entero y hay que poner las cabeceras
+# en Panel de control → Portal de inicio de sesión → Avanzado → Cabecera
+# HTTP personalizada (ver seguridad-cabeceras.conf).
+#
+# Si has puesto las cabeceras ahí, las de abajo sobran: se duplicarían.
+# No rompe nada, pero es ruido.
+
+# ── Tipos MIME ─────────────────────────────────────────────────────
+#
+# Esto NO es opcional. Apache no conoce .webmanifest y lo sirve como
+# texto plano; entonces el iPhone ignora el manifest entero y la app
+# instalada se queda sin nombre, sin icono y abriéndose dentro de
+# Safari. Es el fallo más típico al montar una PWA en un servidor
+# propio, y no da ningún error: simplemente no funciona.
+AddType application/manifest+json .webmanifest
+AddType text/javascript .js
+AddType image/png .png
+
+# ── Cabeceras de seguridad ─────────────────────────────────────────
+#
+# Tres de estas solo funcionan como cabecera HTTP, no dentro del HTML,
+# así que la Content-Security-Policy del <meta> no las cubre.
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "DENY"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(self), microphone=(), geolocation=(), interest-cohort=()"
+  Header always set Content-Security-Policy "frame-ancestors 'none'"
+
+  # HSTS: descoméntalo SOLO cuando https funcione de verdad. Si lo pones
+  # antes, el navegador se niega a entrar por http y te quedas fuera de
+  # tu propia app hasta que caduque.
+  # Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+  # El service worker decide qué versión de la app ve la gente. Si el
+  # navegador se queda con uno viejo, una actualización puede tardar
+  # días en llegar.
+  <FilesMatch "sw\.js$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </FilesMatch>
+
+  # config.js lleva la dirección de TU Supabase: si se cachea, cambiar
+  # de proyecto no tendría efecto.
+  <FilesMatch "config\.js$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </FilesMatch>
+
+  # El resto sí se cachea: el service worker ya se encarga de refrescar
+  # lo que haga falta.
+  <FilesMatch "\.(css|png|webmanifest)$">
+    Header set Cache-Control "public, max-age=604800"
+  </FilesMatch>
+</IfModule>
+
+# ── Compresión ─────────────────────────────────────────────────────
+#
+# styles.css pasa de 60 KB y app.js de 100. Comprimidos bajan a menos de
+# la quinta parte, y el DS115j tiene una CPU de 800 MHz: comprimir un
+# archivo de texto le cuesta menos que mandarlo entero.
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/manifest+json
+</IfModule>
+
+# ── Nada de listar carpetas ────────────────────────────────────────
+Options -Indexes
+
+# Y que no se pueda leer este archivo desde fuera.
+<Files ".htaccess">
+  Require all denied
+</Files>
