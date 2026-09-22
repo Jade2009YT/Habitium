@@ -21,6 +21,7 @@ enum TransactionCategory: String, Codable, CaseIterable, Identifiable {
     case services
     case transport
     case health
+    case shopping
     case salary
     case other
 
@@ -34,6 +35,7 @@ enum TransactionCategory: String, Codable, CaseIterable, Identifiable {
         case .services: return "Servicios"
         case .transport: return "Transporte"
         case .health: return "Salud"
+        case .shopping: return "Compras"
         case .salary: return "Salario"
         case .other: return "Otro"
         }
@@ -47,6 +49,7 @@ enum TransactionCategory: String, Codable, CaseIterable, Identifiable {
         case .services: return "bolt.fill"
         case .transport: return "car.fill"
         case .health: return "heart.fill"
+        case .shopping: return "bag.fill"
         case .salary: return "dollarsign.circle.fill"
         case .other: return "ellipsis.circle.fill"
         }

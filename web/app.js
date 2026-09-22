@@ -37,6 +37,7 @@ import * as rut from "./routines.js";
 import * as avisos from "./avisos.js";
 import * as ia from "./ia.js";
 import * as nutri from "./nutricion-ia.js";
+import * as fin from "./finanzas-ia.js";
 
 const cfg = window.HABITIUM_CONFIG;
 const isConfigured =
@@ -1076,6 +1077,8 @@ $("food-form").addEventListener("submit", async (e) => {
 // ── Agenda ──────────────────────────────────────────────────────────
 
 async function loadPlanner() {
+  await pintarCalendario();
+
   const tasks = (await store.all("planner_tasks")).sort((a, b) => {
     if (!a.due_date) return 1;
     if (!b.due_date) return -1;
@@ -1151,16 +1154,14 @@ $("task-form").addEventListener("submit", async (e) => {
 
 // ── Finanzas ────────────────────────────────────────────────────────
 
-const CATEGORIES = {
-  food: { name: "Comida", icon: "🍽️" },
-  leisure: { name: "Ocio", icon: "🎮" },
-  savings: { name: "Ahorro", icon: "🏦" },
-  services: { name: "Servicios", icon: "⚡" },
-  transport: { name: "Transporte", icon: "🚗" },
-  health: { name: "Salud", icon: "❤️" },
-  salary: { name: "Salario", icon: "💰" },
-  other: { name: "Otro", icon: "•••" },
-};
+/** Una sola lista de categorías en toda la app: la de finanzas-ia.js.
+ *  Antes había dos —esta y aquella— y ya se habían separado: la web
+ *  clasificaba gastos como "shopping" y ni este objeto ni el enum de
+ *  Swift lo conocían, así que el mismo gasto se veía distinto según el
+ *  dispositivo. */
+const CATEGORIES = Object.fromEntries(
+  Object.entries(fin.CATEGORIAS).map(([id, c]) => [id, { name: c.nombre, icon: c.icono }])
+);
 
 const monthTransactions = async () =>
   (await store.all("transactions"))
@@ -1173,38 +1174,470 @@ async function budgetSettings() {
   return b;
 }
 
+// ── Finanzas: plan de ahorro con las cuentas hechas ─────────────────
+//
+// Mismo patrón que Nutrición, y por la misma razón: al entrar por
+// primera vez se pregunta lo que hace falta, y a partir de ahí hay un
+// plan en vez de un número puesto a ojo.
+//
+// La diferencia con Nutrición es quién manda. Allí la IA propone y la
+// fórmula acota; aquí la ARITMÉTICA calcula y la IA solo comenta. Un
+// plan de ahorro es restar y dividir: no hay nada que opinar sobre si
+// 500 € al mes caben en 20 € de margen.
+
+const CLAVE_FIN = "habitium.finanzas.perfil";
+
+function perfilFinanzas() {
+  try { return JSON.parse(localStorage.getItem(CLAVE_FIN) ?? "null"); } catch (e) { return null; }
+}
+function guardarPerfilFinanzas(datos) {
+  try { localStorage.setItem(CLAVE_FIN, JSON.stringify(datos)); } catch (e) {}
+}
+
+let fquiz = { paso: 0, respuestas: {}, forzado: false, cargado: false };
+let generacionFinanzas = 0;
+
 async function loadFinance() {
-  const budget = await budgetSettings(); // fija la moneda antes de formatear
-  const txs = await monthTransactions();
+  const generacion = ++generacionFinanzas;
+  const budget = await budgetSettings();   // fija la moneda antes de formatear
+  const perfil = perfilFinanzas();
+  const txs = await store.all("transactions");
+  if (generacion !== generacionFinanzas) return;   // ver loadNutrition
 
-  const income = txs.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
-  const expense = txs.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
-  const monthly = budget?.monthly_budget ?? 0;
+  // El cuestionario se DEDUCE, no se guarda en una bandera: un pintado
+  // tardío no puede reabrirlo después de haberlo terminado.
+  const faltaPerfil = !perfil;
+  const tocaQuiz = fquiz.forzado || faltaPerfil;
 
-  $("fin-income").textContent = money(income);
-  $("fin-expense").textContent = money(expense);
-  $("fin-available").textContent = money(Math.max(0, monthly - expense));
+  $("finance-quiz").hidden = !tocaQuiz;
+  $("finance-plan").hidden = tocaQuiz;
 
-  const byCategory = {};
-  for (const t of txs) {
-    if (t.type !== "expense") continue;
-    byCategory[t.category] = (byCategory[t.category] ?? 0) + t.amount;
+  // Con el cuestionario abierto se esconde TODO lo demás. Dejarlo a la
+  // vista enseña tres tarjetas con guiones y dos titulillos sin nada
+  // debajo, que es lo que se veía en la captura: parece que la app está
+  // rota en vez de que te está preguntando algo.
+  for (const el of document.querySelectorAll("#view-finance > *")) {
+    if (el.id === "finance-quiz" || el.id === "finance-plan") continue;
+    el.hidden = tocaQuiz;
   }
-  const ordered = Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
-  const max = ordered[0]?.[1] ?? 0;
 
-  $("fin-categories").innerHTML = ordered.length
-    ? ordered
-        .map(
-          ([cat, amount]) => `
-        <div class="cat-bar">
-          <div class="cat-name">${CATEGORIES[cat]?.icon ?? ""} ${CATEGORIES[cat]?.name ?? cat}</div>
-          <div class="track"><div class="track-fill orange" style="width:${(amount / max) * 100}%"></div></div>
-          <div class="cat-amount">${money(amount)}</div>
-        </div>`
-        )
-        .join("")
-    : `<p class="empty"><span class="empty-icon" aria-hidden="true">🥧</span><span class="empty-title">Sin gastos este mes</span><span class="empty-hint">En cuanto apuntes uno verás en qué se te va el dinero.</span></p>`;
+  if (tocaQuiz) {
+    if (!fquiz.cargado) empezarFQuiz(perfil);
+    pintarFQuiz();
+    return;
+  }
+
+  pintarPlanAhorro(perfil, txs);
+  pintarResumenMes(budget, txs);
+  pintarCategorias(txs);
+  await pintarMovimientos();
+}
+
+// ── El cuestionario ─────────────────────────────────────────────────
+
+function empezarFQuiz(previo, { forzado = false } = {}) {
+  fquiz = { paso: 0, respuestas: { ...(previo ?? {}) }, forzado, cargado: true };
+}
+
+function pintarFQuiz() {
+  const pregunta = fin.PREGUNTAS[fquiz.paso];
+  if (!pregunta) return;
+
+  const total = fin.PREGUNTAS.length;
+  $("fq-bar").style.width = `${Math.round((fquiz.paso / total) * 100)}%`;
+  $("fq-count").textContent = `${fquiz.paso + 1} de ${total}`;
+  $("fq-back").disabled = fquiz.paso === 0;
+  $("fq-next").textContent = fquiz.paso === total - 1 ? "Ver mi plan" : "Siguiente";
+
+  const valor = fquiz.respuestas[pregunta.id] ?? "";
+  $("fq-body").innerHTML = `
+    <h2 class="quiz-question">${esc(pregunta.texto)}</h2>
+    ${pregunta.ayuda ? `<p class="muted sm">${esc(pregunta.ayuda)}</p>` : ""}
+    ${campoFQuiz(pregunta, valor)}
+  `;
+
+  $("fq-body").querySelectorAll("[data-fopcion]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      fquiz.respuestas[pregunta.id] = btn.dataset.fopcion;
+      if (fquiz.paso < total - 1) fquiz.paso++;
+      pintarFQuiz();
+    });
+  });
+
+  const campo = $("fq-input");
+  if (campo) {
+    campo.addEventListener("input", () => { fquiz.respuestas[pregunta.id] = campo.value; });
+    campo.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); avanzarFQuiz(); } });
+    setTimeout(() => campo.focus(), 30);
+  }
+}
+
+function campoFQuiz(pregunta, valor) {
+  if (pregunta.tipo === "opciones") {
+    return `<div class="quiz-options">
+      ${pregunta.opciones.map((o) => `
+        <button type="button" class="quiz-option ${valor === o.valor ? "is-on" : ""}" data-fopcion="${esc(o.valor)}">
+          <span class="quiz-option-icon" aria-hidden="true">${esc(o.icono ?? "")}</span>
+          <span>${esc(o.etiqueta)}</span>
+        </button>`).join("")}
+    </div>`;
+  }
+  if (pregunta.tipo === "dinero" || pregunta.tipo === "numero") {
+    // El símbolo va DELANTE del número en el caso del dinero y detrás en
+    // "meses". Suena a detalle tonto, pero "12 €" y "€ 12" se leen
+    // distinto, y en España el euro va detrás.
+    const unidad = pregunta.tipo === "dinero" ? "€" : (pregunta.unidad ?? "");
+    return `<div class="quiz-number">
+      <input id="fq-input" type="number" inputmode="decimal"
+             min="${pregunta.min}" max="${pregunta.max}" step="${pregunta.tipo === "dinero" ? "0.01" : (pregunta.paso ?? 1)}"
+             value="${esc(String(valor))}" placeholder="—">
+      <span>${esc(unidad)}</span>
+    </div>`;
+  }
+  return `<textarea id="fq-input" class="quiz-text" rows="3"
+            placeholder="Escribe lo que quieras, o déjalo en blanco">${esc(String(valor))}</textarea>`;
+}
+
+function avanzarFQuiz() {
+  const pregunta = fin.PREGUNTAS[fquiz.paso];
+  const valor = fquiz.respuestas[pregunta.id];
+
+  if (!pregunta.opcional && (valor === undefined || valor === "")) {
+    return mensajeFQuiz("Contesta esto para seguir.");
+  }
+  if (pregunta.tipo === "dinero" || pregunta.tipo === "numero") {
+    const n = Number(valor);
+    if (!Number.isFinite(n) || n < pregunta.min || n > pregunta.max) {
+      const unidad = pregunta.tipo === "dinero" ? "€" : (pregunta.unidad ?? "");
+      return mensajeFQuiz(`Tiene que estar entre ${pregunta.min} y ${pregunta.max} ${unidad}.`);
+    }
+    fquiz.respuestas[pregunta.id] = n;
+  }
+
+  mensajeFQuiz("");
+  if (fquiz.paso < fin.PREGUNTAS.length - 1) { fquiz.paso++; pintarFQuiz(); }
+  else montarPlanAhorro();
+}
+
+const mensajeFQuiz = (texto) => { $("fq-status").textContent = texto; };
+
+$("fq-next").addEventListener("click", avanzarFQuiz);
+$("fq-back").addEventListener("click", () => {
+  if (fquiz.paso > 0) { fquiz.paso--; mensajeFQuiz(""); pintarFQuiz(); }
+});
+
+/** Monta el plan. Las cuentas se hacen SIEMPRE; la IA solo comenta, y
+ *  si no contesta el plan sale igual. */
+async function montarPlanAhorro() {
+  const { valido, faltan } = fin.validarRespuestas(fquiz.respuestas);
+  if (!valido) {
+    fquiz.paso = fin.PREGUNTAS.findIndex((p) => p.id === faltan[0]);
+    pintarFQuiz();
+    return mensajeFQuiz("Falta contestar esto.");
+  }
+
+  const plan = fin.calcularPlan(fquiz.respuestas);
+  const avisos = fin.avisosDelPlan(plan, fquiz.respuestas);
+
+  // El presupuesto y el objetivo SÍ se sincronizan: son datos de la app.
+  // Lo que no sube a la nube es el cuestionario (cuánto ganas, cuánto
+  // gastas), igual que en Nutrición.
+  await store.putSingleton("budget_settings", {
+    monthly_budget: plan.presupuesto,
+    total_savings: plan.ahorroActual,
+    currency_code: (await budgetSettings())?.currency_code ?? "EUR",
+    savings_goal_amount: plan.objetivo,
+    savings_goal_date: new Date(Date.now() + plan.meses * 30 * 86400000).toISOString(),
+  });
+
+  let resumen = "";
+  let consejo = "";
+  let falloIA = null;
+
+  if (ia.hayClave()) {
+    $("fq-next").disabled = true;
+    mensajeFQuiz("Preguntando a la IA…");
+    try {
+      const txs = await store.all("transactions");
+      const bruto = await ia.preguntarJSON(
+        fin.promptPlan(fquiz.respuestas, plan, fin.porCategoria(txs))
+      );
+      resumen = String(bruto.resumen ?? "").slice(0, 600);
+      consejo = String(bruto.consejo ?? "").slice(0, 300);
+      if (bruto.recorte) consejo += ` ${String(bruto.recorte).slice(0, 200)}`;
+    } catch (error) {
+      falloIA = error?.message ?? "La IA no ha contestado.";
+    }
+    $("fq-next").disabled = false;
+  }
+
+  guardarPerfilFinanzas({ ...fquiz.respuestas, plan, avisos, resumen, consejo, falloIA, calculado: nowISO() });
+  fquiz.forzado = false;
+  mensajeFQuiz("");
+  await loadFinance();
+}
+
+$("fplan-redo").addEventListener("click", () => {
+  empezarFQuiz(perfilFinanzas(), { forzado: true });
+  loadFinance();
+});
+
+// ── El plan pintado ─────────────────────────────────────────────────
+
+function pintarPlanAhorro(perfil, txs) {
+  const plan = perfil?.plan ?? fin.calcularPlan(perfil ?? {});
+  const pct = plan.objetivo > 0 ? Math.min(100, Math.round((plan.ahorroActual / plan.objetivo) * 100)) : 0;
+
+  $("fplan-now").textContent = money(plan.ahorroActual);
+  $("fplan-target").textContent = `de ${money(plan.objetivo)} · ${pct}%`;
+  $("fplan-bar").style.width = `${pct}%`;
+  $("fplan-bar").classList.toggle("is-stuck", !plan.viable);
+
+  // Si las cuentas no dan, el texto de la IA NO se enseña — igual que en
+  // Nutrición cuando el cerrojo corrige. Un "vas muy bien" encima de un
+  // plan que no sale es peor que no decir nada.
+  const cuadra = plan.viable && !perfil?.falloIA;
+
+  $("fplan-why").textContent = cuadra
+    ? (perfil?.resumen || `Apartando ${money(plan.porMes)} al mes llegas a ${money(plan.objetivo)} en ${plan.meses} ${plan.meses === 1 ? "mes" : "meses"}.`)
+    : `Con tus números, apartar ${money(plan.necesarioPorMes)} al mes es lo que haría falta. Abajo tienes por qué no sale y qué cambiar.`;
+
+  $("fplan-tip").textContent = cuadra ? (perfil?.consejo ?? "") : "";
+  $("fplan-tip").hidden = !cuadra || !perfil?.consejo;
+
+  const avisos = perfil?.avisos ?? [];
+  $("fplan-warnings").innerHTML = [
+    ...avisos.map((a) => `<li class="warn">${esc(a)}</li>`),
+    ...(perfil?.falloIA ? [`<li class="warn">La IA no contestó (${esc(perfil.falloIA)}). Las cuentas son las mismas: no dependen de ella.</li>`] : []),
+  ].join("");
+}
+
+function pintarResumenMes(budget, txs) {
+  const estado = fin.estadoDelMes(txs, budget?.monthly_budget ?? 0);
+
+  $("fin-income").textContent = money(estado.ingresado);
+  $("fin-expense").textContent = money(estado.gastado);
+  $("fin-available").textContent = money(Math.max(0, estado.disponible));
+
+  // El aviso por proyección: "a este ritmo acabas el mes en X". Decirlo
+  // el día 28 no sirve de nada; decirlo el día 10 sí.
+  const caja = $("fin-available").closest(".card");
+  caja?.classList.toggle("is-warning", estado.teVasAPasar);
+  if (estado.porDia !== null) {
+    $("fin-available").title = `Te quedan ${money(estado.porDia)} al día hasta fin de mes`;
+  }
+}
+
+function pintarCategorias(txs) {
+  const cats = fin.porCategoria(txs);
+  const total = cats.reduce((s, c) => s + c.importe, 0);
+  $("fin-month-total").textContent = money(total);
+
+  if (!cats.length) {
+    $("fin-categories").innerHTML = emptyState("💶", "Nada gastado este mes", "Apunta un gasto y aparecerá aquí, repartido por categorías.");
+    return;
+  }
+
+  const max = cats[0].importe;
+  $("fin-categories").innerHTML = cats
+    .map((c) => `
+      <div class="cat-row">
+        <div class="cat-name">${esc(c.icono)} ${esc(c.nombre)}</div>
+        <div class="cat-track"><i style="width:${max > 0 ? Math.round((c.importe / max) * 100) : 0}%"></i></div>
+        <div class="cat-value">${money(c.importe)} <small>${c.porcentaje}%</small></div>
+      </div>`)
+    .join("");
+}
+
+// ── Gasto rápido: "4,20 bocadillo" ──────────────────────────────────
+//
+// Es el mismo camino que usa el atajo de Apple Pay (ver el README). Por
+// eso funciona SIN IA: en la cola del súper con mala cobertura, si
+// dependiera de que la IA conteste fallaría justo cuando hace falta. La
+// IA solo afina la categoría, y si no está, se usa la tabla de palabras.
+
+$("quick-expense").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const texto = $("quick-text").value.trim();
+  if (!texto) return;
+
+  const local = fin.interpretarGasto(texto);
+  if (!local) {
+    $("quick-status").textContent = "No encuentro el importe. Escribe algo como «4,20 bocadillo».";
+    return;
+  }
+
+  $("quick-text").value = "";
+  $("quick-status").textContent = "";
+
+  // Se guarda YA con lo que se ha entendido en local. Si la IA mejora la
+  // categoría después, se actualiza la fila. Al revés —esperar a la IA
+  // para guardar— sería perder el gasto cuando no hay red.
+  const tx = await store.insert("transactions", {
+    amount: local.importe,
+    type: "expense",
+    category: local.categoria,
+    note: local.nota,
+    date: nowISO(),
+  });
+
+  if (ia.hayClave()) {
+    try {
+      const mejor = fin.normalizarGasto(await ia.preguntarJSON(fin.promptClasificar(texto)));
+      if (mejor.importe && mejor.categoria !== local.categoria) {
+        await store.update("transactions", tx.id, { category: mejor.categoria });
+      }
+    } catch (error) {
+      /* la IA es un extra: el gasto ya está apuntado */
+    }
+  }
+});
+
+// ── Agenda: el calendario del mes ───────────────────────────────────
+//
+// Un calendario que solo enseña los días es un adorno. Este enseña un
+// punto por cada cosa que tienes ese día —tarea, evento, examen— y al
+// pulsar un día filtra la lista de abajo. Eso es lo que lo convierte en
+// la forma de mirar el mes en vez de un cuadro bonito.
+
+let mesCalendario = null;   // null = el mes de hoy
+let diaElegido = null;
+
+const claveFecha = (f) =>
+  `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, "0")}-${String(f.getDate()).padStart(2, "0")}`;
+
+async function cosasDelMes() {
+  const [tasks, events, examenes] = await Promise.all([
+    store.all("planner_tasks"),
+    store.all("planner_events"),
+    store.all("study_events"),
+  ]);
+
+  const mapa = new Map();
+  const mete = (fecha, tipo, titulo, id) => {
+    if (!fecha) return;
+    const d = new Date(fecha);
+    if (Number.isNaN(d.getTime())) return;
+    const k = claveFecha(d);
+    if (!mapa.has(k)) mapa.set(k, []);
+    mapa.get(k).push({ tipo, titulo, id, fecha: d });
+  };
+
+  for (const t of tasks) if (!t.is_completed) mete(t.due_date, "task", t.title, t.id);
+  for (const e of events) mete(e.start_date, "event", e.title, e.id);
+  for (const x of examenes) mete(x.date, "exam", x.title, x.id);
+
+  for (const lista of mapa.values()) lista.sort((a, b) => a.fecha - b.fecha);
+  return mapa;
+}
+
+async function pintarCalendario() {
+  const hoy = new Date();
+  const base = mesCalendario ?? new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  const cosas = await cosasDelMes();
+
+  const titulo = base.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+  $("cal-title").textContent = titulo.charAt(0).toUpperCase() + titulo.slice(1);
+
+  // El primer día de la rejilla es el lunes de la semana del día 1.
+  // getDay() devuelve domingo=0, de ahí el +6 %7: es la fuente de la
+  // mitad de los calendarios que empiezan torcidos.
+  const primero = new Date(base.getFullYear(), base.getMonth(), 1);
+  const desplazamiento = (primero.getDay() + 6) % 7;
+  const inicio = new Date(primero);
+  inicio.setDate(1 - desplazamiento);
+
+  const celdas = [];
+  for (let i = 0; i < 42; i++) {
+    const dia = new Date(inicio);
+    dia.setDate(inicio.getDate() + i);
+
+    const deEsteMes = dia.getMonth() === base.getMonth();
+    const esHoy = claveFecha(dia) === claveFecha(hoy);
+    const k = claveFecha(dia);
+    const suyo = cosas.get(k) ?? [];
+    const tipos = [...new Set(suyo.map((c) => c.tipo))];
+
+    celdas.push(`
+      <button type="button" class="cal-day ${deEsteMes ? "" : "is-out"} ${esHoy ? "is-today" : ""} ${diaElegido === k ? "is-picked" : ""}"
+              data-dia="${k}" role="gridcell"
+              aria-label="${dia.getDate()} de ${titulo}${suyo.length ? `, ${suyo.length} cosas` : ""}">
+        <span class="cal-num">${dia.getDate()}</span>
+        <span class="cal-dots">${tipos.map((t) => `<i class="dot ${t}"></i>`).join("")}</span>
+      </button>`);
+
+    // Seis semanas siempre daría filas vacías en muchos meses. Se corta
+    // en cuanto se ha pasado el mes y se ha cerrado la semana.
+    if (i >= 27 && (i + 1) % 7 === 0 && dia.getMonth() !== base.getMonth()) break;
+  }
+
+  $("cal-grid").innerHTML = celdas.join("");
+  $("cal-grid").querySelectorAll("[data-dia]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      diaElegido = diaElegido === btn.dataset.dia ? null : btn.dataset.dia;
+      pintarCalendario();
+      pintarDiaElegido(cosas);
+    });
+  });
+
+  pintarDiaElegido(cosas);
+}
+
+function pintarDiaElegido(cosas) {
+  const caja = $("cal-day");
+  if (!diaElegido) { caja.hidden = true; return; }
+
+  const [a, m, d] = diaElegido.split("-").map(Number);
+  const fecha = new Date(a, m - 1, d);
+  const texto = fecha.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
+  $("cal-day-title").textContent = texto.charAt(0).toUpperCase() + texto.slice(1);
+
+  const suyo = cosas.get(diaElegido) ?? [];
+  const ETIQUETAS = { task: ["✅", "Tarea"], event: ["📅", "Evento"], exam: ["🎓", "Examen"] };
+
+  $("cal-day-list").innerHTML = suyo.length
+    ? suyo.map((c) => `
+        <li class="row">
+          <div class="row-icon">${ETIQUETAS[c.tipo]?.[0] ?? "•"}</div>
+          <div class="row-main">
+            <div class="row-title">${esc(c.titulo)}</div>
+            <div class="row-sub"><span>${ETIQUETAS[c.tipo]?.[1] ?? ""} · ${timeOf(c.fecha.toISOString())}</span></div>
+          </div>
+        </li>`).join("")
+    : emptyState("🎉", "Nada este día", "Tienes el día libre.");
+
+  caja.hidden = false;
+}
+
+$("cal-prev").addEventListener("click", () => {
+  const base = mesCalendario ?? new Date();
+  mesCalendario = new Date(base.getFullYear(), base.getMonth() - 1, 1);
+  diaElegido = null;
+  pintarCalendario();
+});
+$("cal-next").addEventListener("click", () => {
+  const base = mesCalendario ?? new Date();
+  mesCalendario = new Date(base.getFullYear(), base.getMonth() + 1, 1);
+  diaElegido = null;
+  pintarCalendario();
+});
+$("cal-today").addEventListener("click", () => {
+  mesCalendario = null;
+  diaElegido = claveFecha(new Date());
+  pintarCalendario();
+});
+$("cal-day-close").addEventListener("click", () => {
+  diaElegido = null;
+  pintarCalendario();
+});
+
+/** Solo la lista de movimientos. Los totales y las categorías los
+ *  pintan ahora pintarResumenMes y pintarCategorias, que usan las
+ *  cuentas de finanzas-ia.js — dejarlo aquí también los pintaría dos
+ *  veces con dos lógicas distintas. */
+async function pintarMovimientos() {
+  await budgetSettings();      // fija la moneda antes de formatear
+  const txs = await monthTransactions();
 
   const list = $("tx-list");
   if (!txs.length) {
@@ -3157,6 +3590,11 @@ try {
     sessionStorage.setItem("habitium.vista-inicial", "routines");
   }
 } catch (e) {}
+
+// El desplegable de categorías, desde la única lista que hay.
+$("tx-category").innerHTML = Object.entries(CATEGORIES)
+  .map(([id, c]) => `<option value="${id}">${c.icon} ${c.name}</option>`)
+  .join("");
 
 buildNav();
 syncHabitKindFields();

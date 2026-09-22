@@ -1052,6 +1052,122 @@ que ya no es el último, se calla) y que el pintado **deduzca** si toca
 cuestionario en vez de guardarlo en una bandera que compite con los
 renders.
 
+## Finanzas: un plan de ahorro con las cuentas hechas
+
+Al entrar por primera vez, un cuestionario: cuánto tienes, cuánto te
+entra, cuánto se te va, cuánto quieres ahorrar y para cuándo. Con eso
+monta el plan.
+
+### Aquí manda la aritmética, no la IA
+
+En Nutrición la IA propone y la fórmula acota. Aquí es más simple: **las
+cuentas las hace la aritmética y la IA solo comenta.** Un plan de ahorro
+es restar y dividir — no hay nada que opinar sobre si 500 € al mes caben
+en 20 € de margen.
+
+Y cuando no caben, la app **no lo maquilla**:
+
+> Para llegar a 3000 € en 6 meses harían falta 500 € al mes, y solo te
+> sobran 20 €.
+> Con tu ritmo real llegarías en 150 meses. Si quieres mantener el plazo,
+> hay que gastar 480 € menos al mes.
+
+Una app que te dice "sí, puedes" cuando no puedes no te está ayudando: te
+está preparando para fallar en enero y dejarlo. Cuando el plan no sale,
+la barra deja de ser verde y **el texto de la IA no se enseña** — igual
+que en Nutrición cuando el cerrojo corrige. Un "vas muy bien" encima de
+un plan que no cuadra es peor que no decir nada.
+
+Tres casos que la aritmética sola resuelve y que una IA fallaría:
+
+- **Gastas más de lo que ingresas.** No se calcula ningún plazo: dividir
+  entre un margen negativo daría "llegas en −12 meses". Primero se dice
+  que hay un agujero, y no se dan consejos de ahorro hasta taparlo.
+- **El plan sale justo** (la cuota se come el 90% del margen). Sale, pero
+  avisa: cualquier imprevisto lo tumba.
+- **Ya tienes lo que querías.** No puede salir "inviable" algo que ya
+  está hecho.
+
+### "En qué se te va"
+
+El gasto del mes por categorías, ordenado de más a menos y con el
+porcentaje. Y el aviso de "te vas a pasar" se decide **por la
+proyección, no por lo gastado**: el día 10 con 100 € de 250 vas bien por
+lo gastado, pero a ese ritmo acabas el mes en 300. Avisarte el día 28 de
+que te has pasado no sirve de nada.
+
+### Apuntar un gasto escribiéndolo
+
+**Finanzas → "Rápido: 4,20 bocadillo"**. Coge el primer número (así
+`4,20 bocadillo para 2` son 4,20 € y no 2) y adivina la categoría por la
+palabra. Funciona **sin IA y sin internet** a propósito: es el mismo
+camino que usa el atajo de Apple Pay, y en la cola del súper con mala
+cobertura un atajo que depende de un servidor falla justo cuando hace
+falta. La IA, si está, solo afina la categoría *después* — el gasto ya
+está guardado.
+
+## Apple Pay: lo que se puede y lo que no
+
+**Ninguna app de terceros puede leer tus pagos de Apple Pay.** No hay
+API. El importe y el comercio no salen de Wallet, ni en iOS ni en
+Android. La automatización de Atajos con disparador "Transacción" sí da
+el importe, pero solo con Apple Card y Apple Cash, que en España no
+existen.
+
+Lo que **sí** funciona: cuando pagas con el doble clic del botón lateral,
+iOS abre Wallet y al terminar la cierra — y Atajos sabe dispararse
+**al cerrarse una app**. Así que la automatización no adivina el importe,
+pero te lo pregunta **en el momento exacto en que acabas de pagar**, que
+es cuando te acuerdas.
+
+Los pasos están en **[`docs/apple-pay-atajo.md`](docs/apple-pay-atajo.md)**
+(cinco minutos, una vez). Habitium expone tres acciones a Atajos y a
+Siri, en `Core/Intents/HabitiumIntents.swift`:
+
+- **Apuntar un gasto** — acepta "4,20 bocadillo" y lo guarda sin abrir la
+  app.
+- **Marcar el siguiente paso de mi rutina** — *"Oye Siri, siguiente paso
+  en Habitium"* mientras te duchas. Marca el paso que toca y recalcula
+  los avisos de los que quedan.
+- **¿Cuánto me queda este mes?**
+
+`ExpenseParser.swift` y `interpretarGasto` en JavaScript son dos copias
+de la misma lógica **con los mismos casos de prueba**: escribir "4,20
+bocadillo" en el iPhone y en la web tiene que dar el mismo gasto.
+
+## Agenda: el calendario del mes
+
+Un calendario que solo enseña los días es un adorno. Este pone un punto
+por cada cosa que tienes ese día —🟢 tareas, 🔵 eventos, 🩷 exámenes— y al
+pulsar un día abre lo que hay debajo. Los exámenes salen de Estudios, así
+que la agenda y el curso no van por separado.
+
+Detalle de calendario que se equivoca la mitad de las veces: la semana
+empieza en **lunes**. `getDay()` devuelve domingo = 0, así que el
+desplazamiento es `(primerDia.getDay() + 6) % 7`. Sin eso, el calendario
+sale corrido un día.
+
+## Un fallo de CSS que se llevó por delante tres pantallas
+
+Todo el CSS nuevo de esta tanda usaba el atajo `font`:
+
+```css
+.goal-now { font: 700 30px/1 inherit; }   /* ← INVÁLIDO */
+```
+
+`inherit` **no vale como familia dentro del atajo `font`**, así que el
+navegador descarta la declaración **entera** — no solo la familia. El
+resultado: siete reglas silenciosamente muertas y números que debían
+medir 30px saliendo a 15px, con el peso por defecto.
+
+No se vio leyendo el código ni con las pruebas en verde: se vio midiendo
+los estilos computados en el navegador. Ahora van como propiedades
+sueltas, que heredan la familia solas.
+
+De paso salió otro: `.card h2` (especificidad 0,1,1) le ganaba a
+`.quiz-question` (0,1,0), así que la pregunta del cuestionario salía a
+11px **y en mayúsculas**, como el titulillo de una tarjeta.
+
 ## Estudios — asignaturas, notas y asistencia
 
 El módulo que cierra la idea original del sistema de niveles: *"cada día
