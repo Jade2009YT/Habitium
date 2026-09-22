@@ -968,6 +968,90 @@ tiene `RoutineNotifications.swift`:
 
 38 pruebas en `web/routines.test.mjs`.
 
+## Nutrición: el objetivo lo decide la IA (pero no del todo)
+
+Tu objetivo diario ya no sale de una tabla genérica. Al entrar por
+primera vez, un cuestionario de siete preguntas y la IA calcula tus
+calorías y macros. **Sin clave de IA la sección no se abre**: es una
+decisión dura a propósito — media sección funcionando, con el objetivo
+puesto a ojo, no es lo que se quería construir.
+
+También: fotos de la comida analizadas por la IA, y un botón de "¿qué
+como ahora?" que mira lo que llevas hoy y lo que te queda.
+
+### El cerrojo, que es lo que de verdad importa
+
+Un modelo de lenguaje puede devolver 900 kcal. Por un error de formato,
+porque escribiste algo raro en el cuestionario, o porque le pediste
+"quiero adelgazar rápido". Si la app se traga ese número y te lo pone
+como objetivo, **la app está empujando a un chaval de 16 años a comer la
+mitad de lo que su cuerpo necesita para seguir funcionando**.
+
+Así que el reparto es:
+
+- **La IA decide**: el reparto de macros, el ritmo, los consejos, el
+  tono, y los matices que una fórmula no puede tener en cuenta.
+- **La fórmula acota**: se calcula el metabolismo basal con Mifflin-St
+  Jeor y el gasto diario, y la propuesta de la IA tiene que caer en un
+  rango razonable alrededor de eso.
+
+Los límites, en `nutricion-ia.js`:
+
+| Qué | Límite | Por qué |
+|---|---|---|
+| Calorías | nunca por debajo del basal | es lo que gasta el cuerpo tumbado sin hacer nada |
+| Calorías | nunca más del doble del gasto | |
+| Proteína | 0,8 – 3 g/kg | por debajo no se mantiene músculo; por encima no aporta |
+| Grasa | mínimo 15% de las calorías | hace que funcionen las hormonas, y es la primera que todo el mundo recorta |
+| Macros | tienen que sumar las calorías | si no, se recalculan los carbohidratos |
+
+Y **las correcciones se enseñan**. Cambiar el número a escondidas sería
+peor que no cambiarlo: la app estaría mintiendo sobre de dónde sale su
+propio objetivo.
+
+Hay una segunda parte, que salió de mirar la pantalla y no el código:
+cuando el cerrojo ha tenido que corregir, **la explicación y el consejo
+de la IA tampoco se enseñan**. La explicación describía un objetivo de
+900 kcal mientras arriba ponía 1718 — la app contradiciéndose a sí
+misma. Y el consejo, en verde y destacado, era *"No comas después de las
+seis"*, dicho por el mismo modelo que acababa de proponer una dieta de
+hambre. Eso no es un consejo que Habitium deba dar con su propia voz.
+
+### Si la IA se cae
+
+El objetivo se calcula igual, con la fórmula, y la tarjeta lo dice. La
+sección no se queda bloqueada por un error de red: la referencia se
+calcula SIEMPRE antes de llamar a la IA, no después.
+
+### Dónde va cada cosa
+
+- `web/ia.js` — el cliente de OpenAI/Anthropic. La clave va del navegador
+  al proveedor directamente, sin pasar por ningún servidor nuestro. Las
+  fotos se encogen a 1024 px antes de mandarlas: una foto de iPhone son
+  4 MB y se paga por píxel, y a ese tamaño la IA reconoce un plato
+  exactamente igual.
+- `web/nutricion-ia.js` — el cuestionario, la fórmula y el cerrojo. Todo
+  funciones puras, 25 pruebas.
+- Los datos del cuestionario (peso, edad, sexo) se quedan en este
+  navegador y **no** suben a la nube: lo que se sincroniza es el
+  resultado, no tu ficha médica.
+
+### Un fallo que costó encontrar, y la lección
+
+Al terminar el cuestionario, el plan no aparecía: el cuestionario volvía
+a salir encima. `loadNutrition` es `async` y se estaba ejecutando **tres
+veces a la vez** — guardar el objetivo dispara `store.onChange(render)`
+mientras `calcularObjetivo` va por la mitad. Cada copia leía el estado en
+un instante distinto, y el que terminaba el último ganaba, que no es el
+que empezó el último. Encima, el pintado *mutaba* el estado
+(`if (!quiz.activo) empezarQuiz(...)`), así que un pintado tardío
+reabría el cuestionario que ya se había cerrado.
+
+Dos arreglos: un contador de generación (quien vuelve de sus `await` y ve
+que ya no es el último, se calla) y que el pintado **deduzca** si toca
+cuestionario en vez de guardarlo en una bandera que compite con los
+renders.
+
 ## Estudios — asignaturas, notas y asistencia
 
 El módulo que cierra la idea original del sistema de niveles: *"cada día

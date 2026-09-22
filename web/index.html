@@ -284,6 +284,61 @@
 
     <!-- ─────────── Nutrición ─────────── -->
     <section id="view-nutrition" class="view" hidden>
+      <!-- El portero. Nutrición no funciona sin IA: el objetivo lo decide
+           ella, así que sin clave no hay sección. Se enseña esto en vez
+           de una pantalla a medias que no se entiende. -->
+      <article class="card gate" id="nutrition-gate" hidden>
+        <span class="gate-icon" aria-hidden="true">🤖</span>
+        <h2>Nutrición necesita tu IA</h2>
+        <p class="muted">Tu objetivo diario no sale de una tabla genérica: lo calcula una IA a partir de
+           tus datos, y es la misma que reconoce tus comidas en una foto y te dice qué cenar.
+           Para eso hace falta una clave tuya de OpenAI o de Anthropic.</p>
+        <p class="muted sm">Se guarda <b>solo en este navegador</b> y nunca sube a la nube. Las
+           peticiones van de tu móvil a la IA directamente, sin pasar por ningún servidor nuestro.</p>
+        <button class="btn btn-primary btn-lg" id="nutrition-gate-go" type="button">Configurar mi clave</button>
+      </article>
+
+      <!-- El cuestionario inicial. Se pinta desde JS a partir de
+           nutricion-ia.js: las preguntas viven ahí para poder probarlas. -->
+      <article class="card quiz" id="nutrition-quiz" hidden>
+        <header class="quiz-head">
+          <div class="quiz-progress"><i id="quiz-bar"></i></div>
+          <span class="muted sm" id="quiz-count"></span>
+        </header>
+        <div id="quiz-body"></div>
+        <div class="composer-row" id="quiz-actions">
+          <button class="btn btn-ghost" id="quiz-back" type="button">Atrás</button>
+          <button class="btn btn-primary" id="quiz-next" type="button">Siguiente</button>
+        </div>
+        <p class="muted sm" id="quiz-status" role="status"></p>
+      </article>
+
+      <!-- El resultado: lo que ha decidido la IA, por qué, y los avisos
+           si hubo que corregirla. -->
+      <article class="card" id="nutrition-plan" hidden>
+        <header class="card-head">
+          <span class="card-head-inner"><span class="badge" aria-hidden="true">🎯</span><h2>Tu objetivo diario</h2></span>
+          <button class="btn btn-ghost btn-sm" id="plan-redo" type="button">Recalcular</button>
+        </header>
+        <div class="plan-numbers" id="plan-numbers"></div>
+        <p id="plan-why" class="plan-why"></p>
+        <p id="plan-tip" class="plan-tip"></p>
+        <ul class="plan-warnings" id="plan-warnings"></ul>
+      </article>
+
+      <!-- Foto y recomendación, las dos cosas que hacen que valga la pena
+           tener la IA conectada. -->
+      <article class="card" id="nutrition-ai-tools">
+        <div class="ai-tools">
+          <label class="btn btn-primary ai-photo">
+            📷 Analizar una foto
+            <input type="file" id="food-photo" accept="image/*" capture="environment" hidden>
+          </label>
+          <button class="btn btn-ghost" id="food-suggest" type="button">🍽️ ¿Qué como ahora?</button>
+        </div>
+        <div id="ai-result" class="ai-result" hidden></div>
+      </article>
+
       <form id="food-form" class="composer">
         <div class="composer-row">
           <input id="food-name" type="text" placeholder="¿Qué has comido?" required>

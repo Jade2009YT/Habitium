@@ -35,6 +35,8 @@ import * as study from "./study.js";
 import * as seg from "./seguridad.js";
 import * as rut from "./routines.js";
 import * as avisos from "./avisos.js";
+import * as ia from "./ia.js";
+import * as nutri from "./nutricion-ia.js";
 
 const cfg = window.HABITIUM_CONFIG;
 const isConfigured =
@@ -571,7 +573,453 @@ const todaysFood = async () =>
 
 const nutritionGoal = () => store.getSingleton("nutrition_goals");
 
+/** Guardar el objetivo diario. Existe como función propia porque ahora
+ *  hay dos caminos que llegan aquí —el formulario de Ajustes y el
+ *  cuestionario con IA— y los dos tienen que escribir lo mismo. */
+const saveNutritionGoal = (campos) => store.putSingleton("nutrition_goals", campos);
+
+// ── Nutrición con IA ────────────────────────────────────────────────
+//
+// Tres cosas, y las tres necesitan que haya una clave configurada:
+//
+//   1. El objetivo diario lo calcula la IA a partir de un cuestionario.
+//   2. Una foto de la comida se convierte en calorías y macros.
+//   3. "¿Qué como ahora?" mira lo que llevas hoy y lo que te queda.
+//
+// Sin clave, la sección no se abre: se enseña el portero. Es una decisión
+// dura a propósito — media sección funcionando a medias, con el objetivo
+// puesto a ojo, no es lo que se quería construir.
+//
+// El cálculo y el cerrojo de seguridad viven en nutricion-ia.js y están
+// probados; aquí solo se pinta y se guarda.
+
+/** Las respuestas del cuestionario. Van en localStorage y NO en la nube:
+ *  son datos de salud (peso, edad, sexo) y solo hacen falta para calcular
+ *  el objetivo, que sí se sincroniza. Lo que viaja es el resultado, no
+ *  la ficha médica. */
+const CLAVE_QUIZ = "habitium.nutricion.perfil";
+
+function perfilNutricion() {
+  try {
+    return JSON.parse(localStorage.getItem(CLAVE_QUIZ) ?? "null");
+  } catch (e) {
+    return null;
+  }
+}
+
+function guardarPerfil(datos) {
+  try { localStorage.setItem(CLAVE_QUIZ, JSON.stringify(datos)); } catch (e) {}
+}
+
+/** El estado del cuestionario mientras se está contestando.
+ *
+ *  `forzado` es "el usuario ha pulsado Recalcular". Lo de "hay que
+ *  enseñar el cuestionario porque todavía no hay objetivo" NO se guarda
+ *  aquí: se deduce en cada pintada. Mezclar las dos cosas en una sola
+ *  bandera hacía que un pintado tardío reabriera el cuestionario encima
+ *  del plan recién calculado. */
+let quiz = { paso: 0, respuestas: {}, forzado: false, cargado: false };
+
+/** Contador de generación, contra los pintados solapados.
+ *
+ *  loadNutrition es async y puede estar corriendo varias veces a la vez:
+ *  guardar el objetivo dispara store.onChange(render) mientras
+ *  calcularObjetivo va por la mitad. Cada copia lee el estado en un
+ *  instante distinto, y el que TERMINA el último gana — que no es el que
+ *  empezó el último. Quien vuelve de sus awaits y ve que ya no es el
+ *  último, se calla. */
+let generacionNutricion = 0;
+
 async function loadNutrition() {
+  const generacion = ++generacionNutricion;
+  const conClave = ia.hayClave();
+  const perfil = perfilNutricion();
+  const goal = await nutritionGoal();
+
+  // Mientras se esperaba al disco ha entrado otro pintado con datos más
+  // nuevos. Pintar ahora sería poner lo viejo encima de lo nuevo.
+  if (generacion !== generacionNutricion) return;
+
+  // El portero. Sin clave no hay sección: ni cuestionario, ni listas, ni
+  // el formulario de añadir a mano — porque el objetivo contra el que se
+  // comparan esas calorías no existiría.
+  $("nutrition-gate").hidden = conClave;
+  for (const id of ["nutrition-ai-tools", "food-form", "weight-form"]) {
+    $(id).hidden = !conClave;
+  }
+  $("food-list").hidden = !conClave;
+  document.querySelector("#view-nutrition .section-title").hidden = !conClave;
+
+  if (!conClave) {
+    $("nutrition-quiz").hidden = true;
+    $("nutrition-plan").hidden = true;
+    return;
+  }
+
+  // Con clave pero sin haber contestado nunca: el cuestionario. Se
+  // DEDUCE, no se guarda en una bandera: así un pintado tardío no puede
+  // reabrirlo después de haberlo terminado.
+  const faltaPerfil = !perfil || !goal;
+  const tocaQuiz = quiz.forzado || faltaPerfil;
+
+  $("nutrition-quiz").hidden = !tocaQuiz;
+  $("nutrition-plan").hidden = tocaQuiz;
+
+  if (tocaQuiz) {
+    // Cargar las respuestas previas se hace UNA vez. Si se hiciera en
+    // cada pintada, escribir la edad y que llegara un sync te borraría
+    // lo que estabas escribiendo.
+    if (!quiz.cargado) empezarQuiz(perfil);
+    pintarQuiz();
+    return;
+  }
+
+  pintarPlan(goal, perfil);
+  await pintarComidasDelDia();
+}
+
+$("nutrition-gate-go").addEventListener("click", () => go("settings"));
+
+// ── El cuestionario ─────────────────────────────────────────────────
+
+function empezarQuiz(perfilPrevio, { forzado = false } = {}) {
+  // Se arranca con lo que ya hubiera contestado: recalcular el objetivo
+  // porque has cambiado de peso no debería obligarte a repetir la edad.
+  quiz = { paso: 0, respuestas: { ...(perfilPrevio ?? {}) }, forzado, cargado: true };
+}
+
+function pintarQuiz() {
+  const pregunta = nutri.PREGUNTAS[quiz.paso];
+  if (!pregunta) return;
+
+  const total = nutri.PREGUNTAS.length;
+  $("quiz-bar").style.width = `${Math.round((quiz.paso / total) * 100)}%`;
+  $("quiz-count").textContent = `${quiz.paso + 1} de ${total}`;
+  $("quiz-back").disabled = quiz.paso === 0;
+
+  const valor = quiz.respuestas[pregunta.id] ?? "";
+  const ultima = quiz.paso === total - 1;
+  $("quiz-next").textContent = ultima ? "Calcular mi objetivo" : "Siguiente";
+
+  $("quiz-body").innerHTML = `
+    <h2 class="quiz-question">${esc(pregunta.texto)}</h2>
+    ${pregunta.ayuda ? `<p class="muted sm">${esc(pregunta.ayuda)}</p>` : ""}
+    ${pintarCampoQuiz(pregunta, valor)}
+  `;
+
+  // Las opciones avanzan solas al pulsarlas: en un cuestionario de seis
+  // pasos, obligar a elegir Y ADEMÁS pulsar "Siguiente" duplica los
+  // toques sin ganar nada.
+  $("quiz-body").querySelectorAll("[data-opcion]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      quiz.respuestas[pregunta.id] = btn.dataset.opcion;
+      if (quiz.paso < total - 1) { quiz.paso++; pintarQuiz(); }
+      else pintarQuiz();
+    });
+  });
+
+  const campo = $("quiz-input");
+  if (campo) {
+    campo.addEventListener("input", () => { quiz.respuestas[pregunta.id] = campo.value; });
+    campo.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); avanzarQuiz(); } });
+    setTimeout(() => campo.focus(), 30);
+  }
+}
+
+function pintarCampoQuiz(pregunta, valor) {
+  if (pregunta.tipo === "opciones") {
+    return `<div class="quiz-options">
+      ${pregunta.opciones.map((o) => `
+        <button type="button" class="quiz-option ${valor === o.valor ? "is-on" : ""}" data-opcion="${esc(o.valor)}">
+          <span class="quiz-option-icon" aria-hidden="true">${esc(o.icono ?? "")}</span>
+          <span>${esc(o.etiqueta)}</span>
+        </button>`).join("")}
+    </div>`;
+  }
+  if (pregunta.tipo === "numero") {
+    return `<div class="quiz-number">
+      <input id="quiz-input" type="number" inputmode="decimal"
+             min="${pregunta.min}" max="${pregunta.max}" step="${pregunta.paso}"
+             value="${esc(String(valor))}" placeholder="—">
+      <span>${esc(pregunta.unidad ?? "")}</span>
+    </div>`;
+  }
+  return `<textarea id="quiz-input" class="quiz-text" rows="3"
+            placeholder="Escribe lo que quieras, o déjalo en blanco">${esc(String(valor))}</textarea>`;
+}
+
+function avanzarQuiz() {
+  const pregunta = nutri.PREGUNTAS[quiz.paso];
+  const valor = quiz.respuestas[pregunta.id];
+
+  if (!pregunta.opcional && (valor === undefined || valor === "")) {
+    return mensajeQuiz("Contesta esto para seguir.");
+  }
+  if (pregunta.tipo === "numero") {
+    const n = Number(valor);
+    if (!Number.isFinite(n) || n < pregunta.min || n > pregunta.max) {
+      return mensajeQuiz(`Tiene que estar entre ${pregunta.min} y ${pregunta.max} ${pregunta.unidad ?? ""}.`);
+    }
+    quiz.respuestas[pregunta.id] = n;
+  }
+
+  mensajeQuiz("");
+  if (quiz.paso < nutri.PREGUNTAS.length - 1) { quiz.paso++; pintarQuiz(); }
+  else calcularObjetivo();
+}
+
+const mensajeQuiz = (texto) => { $("quiz-status").textContent = texto; };
+
+$("quiz-next").addEventListener("click", avanzarQuiz);
+$("quiz-back").addEventListener("click", () => {
+  if (quiz.paso > 0) { quiz.paso--; mensajeQuiz(""); pintarQuiz(); }
+});
+
+/** Le pide el objetivo a la IA, lo acota y lo guarda. */
+async function calcularObjetivo() {
+  const { valido, faltan } = nutri.validarRespuestas(quiz.respuestas);
+  if (!valido) {
+    // Se vuelve a la primera pregunta que falta en vez de dar un error
+    // suelto: así se ve QUÉ hay que arreglar.
+    quiz.paso = nutri.PREGUNTAS.findIndex((p) => p.id === faltan[0]);
+    pintarQuiz();
+    return mensajeQuiz("Falta contestar esto.");
+  }
+
+  $("quiz-next").disabled = true;
+  mensajeQuiz("Calculando con la IA…");
+
+  // La referencia de la fórmula se calcula SIEMPRE, antes de llamar: si
+  // la IA falla, el objetivo sale igual y la sección no se queda
+  // bloqueada por un error de red.
+  const referencia = nutri.objetivoDeReferencia(quiz.respuestas);
+  let propuesta = referencia;
+  let explicacion = "Calculado con la fórmula de Mifflin-St Jeor a partir de tus datos.";
+  let consejo = "";
+  let avisos = [];
+  let falloIA = null;
+
+  try {
+    const bruto = await ia.preguntarJSON(nutri.promptObjetivo(quiz.respuestas));
+    const acotado = nutri.acotarObjetivo(bruto, quiz.respuestas);
+    propuesta = acotado.objetivo;
+    avisos = acotado.avisos;
+    explicacion = String(bruto.explicacion ?? explicacion).slice(0, 600);
+    consejo = String(bruto.consejo ?? "").slice(0, 300);
+  } catch (error) {
+    falloIA = error?.message ?? "La IA no ha contestado.";
+  }
+
+  await saveNutritionGoal({
+    daily_calorie_goal: propuesta.calorias,
+    protein_goal_grams: propuesta.proteina,
+    carbs_goal_grams: propuesta.carbos,
+    fat_goal_grams: propuesta.grasa,
+    target_weight_kg: null,
+    weekly_rate_kg: null,
+  });
+
+  guardarPerfil({ ...quiz.respuestas, explicacion, consejo, avisos, falloIA, calculado: nowISO() });
+
+  quiz.forzado = false;
+  $("quiz-next").disabled = false;
+  mensajeQuiz("");
+  await loadNutrition();
+}
+
+$("plan-redo").addEventListener("click", () => {
+  empezarQuiz(perfilNutricion(), { forzado: true });
+  loadNutrition();
+});
+
+// ── El plan ─────────────────────────────────────────────────────────
+
+function pintarPlan(goal, perfil) {
+  const numeros = [
+    ["Calorías", Math.round(goal.daily_calorie_goal), "kcal"],
+    ["Proteína", Math.round(goal.protein_goal_grams), "g"],
+    ["Carbos", Math.round(goal.carbs_goal_grams), "g"],
+    ["Grasas", Math.round(goal.fat_goal_grams), "g"],
+  ];
+  $("plan-numbers").innerHTML = numeros
+    .map(([etiqueta, valor, unidad]) => `
+      <div class="plan-number">
+        <span class="plan-value">${valor}</span>
+        <span class="plan-unit">${unidad}</span>
+        <span class="plan-label">${etiqueta}</span>
+      </div>`)
+    .join("");
+
+  // Si el cerrojo ha tenido que corregir a la IA, su explicación y su
+  // consejo NO se enseñan. Dos razones, y las dos importan:
+  //
+  //   · La explicación describe un objetivo que ya no es el que hay. Una
+  //     IA que proponía 900 kcal te cuenta por qué 900, mientras arriba
+  //     pone 1718. Es la app contradiciéndose a sí misma.
+  //   · El consejo sale del mismo modelo que acaba de proponerle una
+  //     dieta de hambre a un adolescente, y va en verde y destacado, que
+  //     es lo más visible de la tarjeta. "No comas después de las seis"
+  //     no es un consejo que Habitium deba dar con su propia voz.
+  //
+  // Se sustituye por un texto propio que dice de dónde sale el número.
+  const corregido = (perfil?.avisos?.length ?? 0) > 0 || perfil?.falloIA;
+
+  $("plan-why").textContent = corregido
+    ? "Este objetivo está calculado con la fórmula de Mifflin-St Jeor a partir de tus datos. Lo que proponía la IA no cuadraba, así que se ha ajustado — abajo tienes el detalle."
+    : (perfil?.explicacion ?? "");
+
+  $("plan-tip").textContent = corregido ? "" : (perfil?.consejo ?? "");
+  $("plan-tip").hidden = corregido || !perfil?.consejo;
+
+  // Los avisos del cerrojo se ENSEÑAN. Corregir el número de la IA a
+  // escondidas sería peor que no corregirlo: la app estaría mintiendo
+  // sobre de dónde sale su propio objetivo.
+  const avisos = perfil?.avisos ?? [];
+  const fallo = perfil?.falloIA;
+  $("plan-warnings").innerHTML = [
+    ...(fallo ? [`<li class="warn">La IA no contestó (${esc(fallo)}). Este objetivo sale de la fórmula.</li>`] : []),
+    ...avisos.map((a) => `<li class="warn">${esc(a)}</li>`),
+  ].join("");
+}
+
+// ── Foto ────────────────────────────────────────────────────────────
+
+$("food-photo").addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = "";               // para poder repetir la misma foto
+  if (!file) return;
+
+  pintarResultadoIA(`<p class="ai-loading">📷 Mirando la foto…</p>`);
+  try {
+    const imagen = await ia.prepararFoto(file);
+    const bruto = await ia.preguntarJSON(nutri.promptFoto(), { imagen });
+    const comida = nutri.normalizarComida(bruto);
+
+    const confianza = { alta: "", media: "La IA no lo tiene del todo claro.", baja: "La IA no está segura de qué es." };
+    pintarResultadoIA(`
+      <div class="ai-card">
+        <h3>${esc(comida.nombre)}</h3>
+        <div class="ai-macros">
+          <span><b>${comida.calorias}</b> kcal</span>
+          <span><b>${comida.proteina}</b> g P</span>
+          <span><b>${comida.carbos}</b> g C</span>
+          <span><b>${comida.grasa}</b> g G</span>
+        </div>
+        ${comida.nota ? `<p class="muted sm">${esc(comida.nota)}</p>` : ""}
+        ${confianza[comida.confianza] ? `<p class="warn sm">${confianza[comida.confianza]} Revisa los números antes de guardarlos.</p>` : ""}
+        <div class="composer-row">
+          <select id="ai-meal" class="w-md">
+            <option value="breakfast">Desayuno</option>
+            <option value="lunch">Almuerzo</option>
+            <option value="dinner">Cena</option>
+            <option value="snack">Snack</option>
+          </select>
+          <button class="btn btn-primary" id="ai-save-food" type="button">Guardar</button>
+          <button class="btn btn-ghost" id="ai-edit-food" type="button">Corregir a mano</button>
+        </div>
+      </div>`);
+
+    // Se preselecciona la comida que toca por la hora: a las nueve de la
+    // noche nadie está apuntando un desayuno.
+    const momento = { desayuno: "breakfast", comida: "lunch", cena: "dinner" }[nutri.momentoDelDia()] ?? "snack";
+    $("ai-meal").value = momento;
+
+    $("ai-save-food").addEventListener("click", async () => {
+      const entry = await store.insert("food_entries", {
+        name: comida.nombre,
+        date: nowISO(),
+        meal_type: $("ai-meal").value,
+        source: "ai",
+        calories: comida.calorias,
+        protein_grams: comida.proteina,
+        carbs_grams: comida.carbos,
+        fat_grams: comida.grasa,
+        analyzed_by: ia.proveedor(),
+      });
+      pintarResultadoIA("");
+      await awardXP("mealLogged", `meal:${idKey(entry.id)}`);
+    });
+
+    // "Corregir a mano" rellena el formulario de abajo en vez de guardar:
+    // la IA acierta el plato y falla la ración más de lo que parece.
+    $("ai-edit-food").addEventListener("click", () => {
+      $("food-name").value = comida.nombre;
+      $("food-calories").value = comida.calorias;
+      $("food-protein").value = comida.proteina;
+      $("food-carbs").value = comida.carbos;
+      $("food-fat").value = comida.grasa;
+      $("food-meal").value = $("ai-meal").value;
+      pintarResultadoIA("");
+      $("food-calories").focus();
+    });
+  } catch (error) {
+    pintarResultadoIA(`<p class="warn">${esc(error?.message ?? "No se ha podido analizar la foto.")}</p>`);
+  }
+});
+
+// ── "¿Qué como ahora?" ──────────────────────────────────────────────
+
+$("food-suggest").addEventListener("click", async () => {
+  const goal = await nutritionGoal();
+  const perfil = perfilNutricion();
+  if (!goal) return;
+
+  const comidas = await todaysFood();
+  const consumido = comidas.reduce(
+    (s, e) => ({
+      calorias: s.calorias + (e.calories ?? 0),
+      proteina: s.proteina + (e.protein_grams ?? 0),
+      carbos: s.carbos + (e.carbs_grams ?? 0),
+      grasa: s.grasa + (e.fat_grams ?? 0),
+    }),
+    { calorias: 0, proteina: 0, carbos: 0, grasa: 0 }
+  );
+
+  pintarResultadoIA(`<p class="ai-loading">🍽️ Pensando qué te viene bien…</p>`);
+  try {
+    const sugerencia = await ia.preguntarJSON(
+      nutri.promptRecomendacion({
+        objetivo: {
+          calorias: Math.round(goal.daily_calorie_goal),
+          proteina: Math.round(goal.protein_goal_grams),
+          carbos: Math.round(goal.carbs_goal_grams),
+          grasa: Math.round(goal.fat_goal_grams),
+        },
+        consumido: {
+          calorias: Math.round(consumido.calorias),
+          proteina: Math.round(consumido.proteina),
+          carbos: Math.round(consumido.carbos),
+          grasa: Math.round(consumido.grasa),
+        },
+        momento: nutri.momentoDelDia(),
+        respuestas: perfil,
+        comidasDeHoy: comidas.map((c) => c.name),
+      })
+    );
+
+    pintarResultadoIA(`
+      <div class="ai-card">
+        <h3>${esc(String(sugerencia.titulo ?? "").slice(0, 120))}</h3>
+        <p>${esc(String(sugerencia.porque ?? "").slice(0, 400))}</p>
+        ${Number(sugerencia.calorias) > 0 ? `
+          <div class="ai-macros">
+            <span><b>${Math.round(Number(sugerencia.calorias))}</b> kcal aprox.</span>
+            ${Number(sugerencia.proteina) > 0 ? `<span><b>${Math.round(Number(sugerencia.proteina))}</b> g P</span>` : ""}
+          </div>` : ""}
+        ${sugerencia.alternativa ? `<p class="muted sm">O si no te apetece: ${esc(String(sugerencia.alternativa).slice(0, 200))}</p>` : ""}
+      </div>`);
+  } catch (error) {
+    pintarResultadoIA(`<p class="warn">${esc(error?.message ?? "La IA no ha contestado.")}</p>`);
+  }
+});
+
+function pintarResultadoIA(html) {
+  const caja = $("ai-result");
+  caja.innerHTML = html;
+  caja.hidden = !html;
+}
+
+async function pintarComidasDelDia() {
   const entries = await todaysFood();
   $("food-total").textContent = `${Math.round(entries.reduce((s, e) => s + (e.calories ?? 0), 0))} kcal`;
 
