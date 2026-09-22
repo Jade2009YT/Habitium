@@ -37,3 +37,8 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots
 fastlane/test_output
+
+# web/vendor/ SÍ se sube al repositorio, a propósito: es la copia local
+# de supabase-js, y tenerla dentro hace que desplegar sea clonar y poner
+# config.js, sin depender de que un CDN de fuera siga en pie. Ver
+# docs/subir-a-internet.md.

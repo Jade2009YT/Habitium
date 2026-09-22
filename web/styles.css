@@ -2570,3 +2570,10 @@ input[type="color"] { min-height: 0; padding: 0; }
    de su tarjeta, que es lo que se quería desde el principio. */
 .view > * { min-width: 0; }
 .table-wrap { min-width: 0; }
+
+/* El mensaje de "no se ha podido cargar", que sustituye al "Cargando…"
+   cuando el arranque se atasca. Ver theme-boot.js. */
+.boot { gap: 10px; text-align: center; padding: 0 28px; }
+.boot p { margin: 0; }
+.boot-hint { font-size: 13px; color: var(--text-3); max-width: 34ch; line-height: 1.5; }
+.boot .btn { margin-top: 6px; }

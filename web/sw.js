@@ -21,7 +21,7 @@
 // Al cambiar los archivos de la app, sube también este archivo con
 // CACHE_VERSION incrementado — así se limpian las cachés antiguas.
 
-const CACHE_VERSION = "habitium-v9";
+const CACHE_VERSION = "habitium-v10";
 
 const SHELL = [
   "./",
@@ -42,9 +42,25 @@ const SHELL = [
   "./nutricion-ia.js",
   "./finanzas-ia.js",
   "./config.js",
+  // Si existe la copia local de supabase-js, se cachea. Si no, el
+  // cache.add falla en silencio y se usa el CDN de abajo.
+  "./vendor/supabase.js",
   "./manifest.webmanifest",
   "./icon.png",
 ];
+
+/** Supabase, que vive en un CDN de fuera.
+ *
+ *  Va aparte de SHELL y se cachea EN LA INSTALACIÓN, no al vuelo. Sin
+ *  esto la app no arranca sin conexión: app.js lo importa de forma
+ *  estática, y un import que no se resuelve deja la página en la
+ *  pantalla de carga para siempre. Se descubrió probando la app
+ *  instalada en modo avión — con la red puesta no se nota nunca.
+ *
+ *  Lo suyo de verdad es descargarlo al proyecto (ver README → "vendorizar
+ *  supabase-js") y quitar esta dependencia entera. Mientras siga aquí,
+ *  esto es el seguro. */
+const CDN_SUPABASE = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/+esm";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -52,7 +68,7 @@ self.addEventListener("install", (event) => {
       // addAll falla entero si un solo archivo falla; se piden de uno en
       // uno para que la instalación no se caiga por algo secundario.
       Promise.all(
-        SHELL.map((url) =>
+        [...SHELL, CDN_SUPABASE].map((url) =>
           cache.add(url).catch((error) => console.warn("SW: no se pudo cachear", url, error))
         )
       )
@@ -98,6 +114,24 @@ self.addEventListener("fetch", (event) => {
   const sameOrigin = url.origin === self.location.origin;
   const isCDN = url.hostname === "cdn.jsdelivr.net";
   if (!sameOrigin && !isCDN) return;
+
+  if (isCDN) {
+    // Versión fija en la URL: lo cacheado nunca queda viejo, así que la
+    // caché manda y la red es solo el respaldo de la primera vez.
+    event.respondWith(
+      caches.match(request).then((cached) =>
+        cached ||
+        fetch(request).then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_VERSION).then((c) => c.put(request, copy));
+          }
+          return response;
+        })
+      )
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(request).then((cached) => {

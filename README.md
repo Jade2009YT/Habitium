@@ -562,6 +562,55 @@ archivos de la app, así que arranca al instante y sigue funcionando sin
 conexión o con el NAS apagado. Ver `web/README.md` para ponerla en marcha
 y para publicarla en un Synology con Web Station.
 
+## Subirla a internet y ponerla en la pantalla de inicio
+
+Se puede, y está construida para eso: manifest, service worker, iconos y
+base de datos local. Subes `web/` a cualquier sitio con HTTPS, la añades
+a la pantalla de inicio del iPhone y **se comporta como una app** —
+icono propio, sin barra de Safari, pantalla completa y sin cobertura.
+
+Los pasos están en **[`docs/subir-a-internet.md`](docs/subir-a-internet.md)**.
+Lo que hay que saber antes de decidir:
+
+- **Ya no caduca a los 7 días**, no hace falta Mac ni Xcode, funciona en
+  Android, se actualiza sola y se la puedes pasar a alguien con un
+  enlace.
+- **Lo que se pierde**: los avisos con la app cerrada, el Apple Watch,
+  los atajos de Siri y los widgets.
+
+Lo de los avisos es lo que de verdad duele, y no es un fallo de
+Habitium: la API que programaba notificaciones diferidas en el navegador
+se probó en Chrome y se retiró. En la PWA los avisos saltan mientras la
+app esté abierta (aunque sea de fondo) y al volver te recuerdan una vez
+el que se acaba de pasar. Se arregla del todo con Web Push y un servidor
+que empuje — con Supabase Edge Functions entra en el plan gratuito.
+
+### Tres cosas que salieron de probar la app instalada, en modo avión
+
+Con la red puesta no se nota ninguna:
+
+1. **La app no arrancaba sin conexión.** `app.js` importaba supabase-js
+   de un CDN con un `import` estático, y un import que no se resuelve
+   hace que el módulo **entero** no se evalúe: ni una línea de la app se
+   ejecuta, no salta ningún error visible, y la pantalla se queda en
+   "Cargando…" para siempre. Ahora la carga es dinámica y prueba primero
+   `./vendor/supabase.js`; el CDN es solo el respaldo.
+2. **Y un seguro por si acaso** (`theme-boot.js`): si a los ocho
+   segundos sigue la pantalla de arranque, es que `app.js` nunca llegó a
+   correr — así que lo dice y ofrece reintentar, en vez de dejarte
+   mirando un "Cargando…" eterno.
+3. **Al hacer dinámico ese import, dejó de registrarse el service
+   worker.** El registro esperaba al evento `load`, pero con un `await`
+   de nivel superior ese evento **ya había disparado** cuando se añadía
+   el listener — y un listener de `load` añadido tarde no se ejecuta
+   nunca. Sin un solo error en consola se iban el arranque instantáneo y
+   el modo sin conexión. Se arregló mirando `document.readyState`.
+
+Hay una comprobación que recorre todo esto sola (`auditar-pwa.mjs` en el
+scratchpad): el manifest, lo que mira el iPhone al instalarla, el
+service worker, la carga **sin servidor levantado**, y que el seguro de
+los ocho segundos salta.
+
 ## Seguridad — auditoría con ataque real
 
 No es una lista de buenas intenciones: se atacó la app de verdad. El

@@ -22,12 +22,23 @@
 //
 // Lo ideal es no depender del CDN en absoluto. Para hacerlo, en tu Mac:
 //
-//   curl -o web/vendor/supabase.js \
+//   mkdir -p web/vendor && curl -o web/vendor/supabase.js \
 //     "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/+esm"
 //
-// y cambiar este import por "./vendor/supabase.js". Desde aquí no se
-// puede: el proxy de este entorno bloquea la descarga.
-import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/+esm";
+// Y ya está: no hay que tocar este archivo. La carga de abajo prueba
+// primero la copia local y solo va al CDN si no la encuentra.
+//
+// ── Por qué esto es un import dinámico y no uno normal ─────────────
+//
+// Con un `import` estático, si la dirección no se resuelve el módulo
+// ENTERO no se evalúa: no se ejecuta una sola línea de la app, no salta
+// ningún error visible, y la pantalla se queda en "Cargando…" para
+// siempre. Eso pasa la primera vez que abres la app sin cobertura, con
+// el CDN caído o con un bloqueador de anuncios agresivo — y parece que
+// la app está rota sin decir por qué.
+//
+// Se descubrió probando la app instalada en modo avión. Con la red
+// puesta no se nota nunca.
 import * as store from "./store.js";
 import * as player from "./player.js";
 import * as prog from "./progression.js";
@@ -38,6 +49,18 @@ import * as avisos from "./avisos.js";
 import * as ia from "./ia.js";
 import * as nutri from "./nutricion-ia.js";
 import * as fin from "./finanzas-ia.js";
+
+const { createClient } = await (async () => {
+  try {
+    // La copia local manda: si está, la app no depende de ninguna red
+    // ajena ni para arrancar ni para funcionar. Da un 404 en la consola
+    // cuando no existe, y es a propósito: el coste de ese 404 es menor
+    // que el de arrastrar una dependencia externa sin saberlo.
+    return await import("./vendor/supabase.js");
+  } catch (e) {
+    return await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/+esm");
+  }
+})();
 
 const cfg = window.HABITIUM_CONFIG;
 const isConfigured =
@@ -91,9 +114,17 @@ store.configure(supabase, async () => (await supabase.auth.getUser()).data?.user
 // página se sirve por http://, la app funciona igual, solo que sin
 // arranque instantáneo ni modo sin conexión.
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
+  const registrar = () =>
     navigator.serviceWorker.register("./sw.js").catch((e) => console.warn("SW:", e));
-  });
+
+  // Ojo con esperar a `load` sin más: este módulo tiene un `await` de
+  // nivel superior (la carga de supabase-js), así que para cuando se
+  // llega aquí el evento `load` puede haber disparado YA — y un listener
+  // de `load` añadido tarde no se ejecuta nunca. El service worker no se
+  // registraba, y con él se iban el arranque instantáneo y el modo sin
+  // conexión, sin un solo error en consola.
+  if (document.readyState === "complete") registrar();
+  else window.addEventListener("load", registrar, { once: true });
 }
 
 // ── Utilidades ──────────────────────────────────────────────────────

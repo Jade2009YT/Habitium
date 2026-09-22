@@ -1,0 +1,32 @@
+# Cabeceras de seguridad para Cloudflare Pages y Netlify.
+#
+# Tres protecciones solo funcionan como cabecera HTTP, no dentro del
+# HTML, así que la Content-Security-Policy del <meta> no basta:
+#
+#   · frame-ancestors — impide que otra web meta Habitium en un <iframe>
+#     invisible y te robe clics ("clickjacking").
+#   · HSTS — obliga al navegador a usar siempre https con tu dominio, así
+#     que nadie en la misma wifi puede degradar la conexión.
+#   · X-Content-Type-Options — impide que el navegador "adivine" el tipo
+#     de un archivo y ejecute como script algo que no lo es.
+#
+# Para el Synology, usa web/seguridad-cabeceras.conf en su lugar.
+
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(self), microphone=(), geolocation=(), interest-cohort=()
+  Content-Security-Policy: frame-ancestors 'none'
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+
+# El service worker no debe cachearse nunca: es lo que decide qué
+# versión de la app ve la gente. Si el navegador se queda con uno viejo,
+# una actualización puede tardar días en llegar.
+/sw.js
+  Cache-Control: no-cache
+
+# Y config.js lleva la dirección de TU Supabase: si se cachea, cambiar de
+# proyecto no tendría efecto.
+/config.js
+  Cache-Control: no-cache
