@@ -42,3 +42,6 @@ fastlane/test_output
 # de supabase-js, y tenerla dentro hace que desplegar sea clonar y poner
 # config.js, sin depender de que un CDN de fuera siga en pie. Ver
 # docs/subir-a-internet.md.
+
+# La copia que deja scripts/sin-cuenta-de-pago.sh
+project.yml.con-cuenta-de-pago
