@@ -860,3 +860,241 @@ end $$;
 -- una cuenta cualquiera puede crear una tabla SIN RLS y usar tu base de
 -- datos como almacén gratis.
 revoke create on schema public from public, anon, authenticated;
+
+-- =========================================================================
+-- SUGERENCIAS — el buzón de ideas
+--
+-- Aquí la gente que usa Habitium escribe qué mejorar, como una reseña, y
+-- los demás lo leen y votan. Es la PRIMERA tabla de toda la base en la que
+-- una persona ve algo escrito por otra, y eso cambia las reglas por
+-- completo: en el resto, "que nadie vea lo de nadie" lo resuelve una línea
+-- (auth.uid() = user_id) y ya está. Aquí hay que decidir a mano qué se ve,
+-- qué se puede escribir y qué no se puede tocar ni siendo el dueño.
+--
+-- Las cuatro decisiones, por si dentro de un año no se entiende por qué:
+--
+--   1. No se publica el correo de nadie. Se guarda un apodo escrito a
+--      mano, y por defecto "Anónimo". El correo de quien escribe no sale
+--      de auth.users.
+--   2. `status` lo pones TÚ, no quien escribe. Si el autor pudiera
+--      cambiarlo, cualquiera marcaría su idea como "en camino".
+--   3. `vote_count` no se escribe nunca a mano: lo lleva un disparador a
+--      partir de la tabla de votos. Si fuera un número editable, subirse
+--      los votos propios sería escribir un número.
+--   4. Cinco al día por cuenta. Sin esto, un bucle de diez líneas llena
+--      la tabla en un minuto.
+-- =========================================================================
+
+create table if not exists public.suggestions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+
+  -- Un apodo, no el correo. Máximo 24 caracteres: lo justo para "Álvaro"
+  -- o "el del fondo", no para meter un párrafo en la lista.
+  author_name text not null default 'Anónimo'
+    check (char_length(author_name) between 1 and 24),
+
+  kind text not null default 'idea'
+    check (kind in ('idea', 'fallo', 'otro')),
+
+  title text not null
+    check (char_length(title) between 3 and 80),
+
+  body text not null default ''
+    check (char_length(body) <= 500),
+
+  -- Solo lo cambias tú desde el SQL Editor. El disparador de abajo se
+  -- encarga de que el autor no pueda.
+  status text not null default 'nueva'
+    check (status in ('nueva', 'mirandolo', 'en_camino', 'hecha', 'no')),
+
+  -- Lo mantiene un disparador desde suggestion_votes. Nunca a mano.
+  vote_count integer not null default 0,
+
+  -- Para tapar algo que no debería estar. Solo tú.
+  hidden boolean not null default false,
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.suggestion_votes (
+  suggestion_id uuid not null references public.suggestions(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  -- La clave primaria doble es lo que impide votar dos veces. No hace
+  -- falta comprobarlo en la app: la base no deja meter la fila repetida.
+  primary key (suggestion_id, user_id)
+);
+
+create index if not exists suggestions_orden_idx
+  on public.suggestions (hidden, vote_count desc, created_at desc);
+create index if not exists suggestion_votes_user_idx
+  on public.suggestion_votes (user_id);
+
+-- ── Quién ve qué ────────────────────────────────────────────────────────
+
+alter table public.suggestions enable row level security;
+alter table public.suggestion_votes enable row level security;
+
+-- Leer: cualquiera con cuenta ve las sugerencias que no estén tapadas, y
+-- siempre las suyas propias (aunque las tapes, para que no parezca que se
+-- ha perdido). Sin cuenta —`anon`— no se ve nada: el buzón es de quien usa
+-- la app, no de internet entero.
+drop policy if exists suggestions_leer on public.suggestions;
+create policy suggestions_leer on public.suggestions
+  for select to authenticated
+  using (not hidden or user_id = auth.uid());
+
+-- Escribir: solo a tu nombre. `with check` es lo que impide firmar como
+-- otro — sin eso, cambiar un campo en las herramientas del navegador
+-- bastaría para publicar en nombre de quien quisieras.
+drop policy if exists suggestions_escribir on public.suggestions;
+create policy suggestions_escribir on public.suggestions
+  for insert to authenticated
+  with check (user_id = auth.uid());
+
+drop policy if exists suggestions_editar on public.suggestions;
+create policy suggestions_editar on public.suggestions
+  for update to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+drop policy if exists suggestions_borrar on public.suggestions;
+create policy suggestions_borrar on public.suggestions
+  for delete to authenticated
+  using (user_id = auth.uid());
+
+-- Los votos se ven todos (hace falta para saber si ya votaste), pero solo
+-- puedes poner y quitar el tuyo.
+drop policy if exists suggestion_votes_leer on public.suggestion_votes;
+create policy suggestion_votes_leer on public.suggestion_votes
+  for select to authenticated using (true);
+
+drop policy if exists suggestion_votes_poner on public.suggestion_votes;
+create policy suggestion_votes_poner on public.suggestion_votes
+  for insert to authenticated with check (user_id = auth.uid());
+
+drop policy if exists suggestion_votes_quitar on public.suggestion_votes;
+create policy suggestion_votes_quitar on public.suggestion_votes
+  for delete to authenticated using (user_id = auth.uid());
+
+-- ── Los tres campos que el autor no puede tocar ─────────────────────────
+--
+-- RLS deja al autor editar SU fila, y eso está bien para corregir una
+-- falta. Pero "editar su fila" incluiría, sin esto, ponerse status
+-- 'hecha', 200 votos y user_id de otro. Este disparador devuelve esos
+-- campos a su valor anterior, pase lo que pase.
+--
+-- Quién queda fuera del candado: tú. Y la comprobación de "eres tú" es
+-- `current_user`, no el papel que venga en el token.
+--
+-- La primera versión miraba auth.role() y estaba mal de dos maneras
+-- distintas, las dos descubiertas atacando esto de verdad:
+--
+--   · Desde el SQL Editor de Supabase no hay token ninguno, así que
+--     auth.role() no devuelve 'service_role' sino nada. El candado se
+--     habría cerrado también para ti: no habrías podido marcar una sola
+--     sugerencia como "hecha" en tu vida.
+--   · Y si el token viene raro, auth.role() revienta al intentar leerlo.
+--     Un disparador que revienta tumba la escritura entera.
+--
+-- `current_user` no puede fallar ni hace falta leer nada: cuando la
+-- petición entra por la app es literalmente el rol `authenticated` (o
+-- `anon`), y cuando entras tú por el SQL Editor es `postgres`. Eso es
+-- exactamente la línea que hay que trazar.
+
+create or replace function public.suggestion_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if current_user in ('authenticated', 'anon') then
+    new.user_id    := old.user_id;
+    new.status     := old.status;
+    new.hidden     := old.hidden;
+    new.vote_count := old.vote_count;
+    new.created_at := old.created_at;
+  end if;
+  new.updated_at := now();
+  return new;
+end $$;
+
+drop trigger if exists habitium_suggestion_guard on public.suggestions;
+create trigger habitium_suggestion_guard
+  before update on public.suggestions
+  for each row execute function public.suggestion_guard();
+
+-- ── El contador de votos ────────────────────────────────────────────────
+--
+-- Se recalcula desde la tabla de votos en vez de sumar y restar uno. Suma
+-- lo mismo mientras todo va bien, y cuando algo va mal —una fila borrada
+-- en cascada, dos votos a la vez— la cuenta sigue siendo la de verdad en
+-- lugar de quedarse desviada para siempre.
+
+create or replace function public.recontar_votos()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  objetivo uuid := coalesce(new.suggestion_id, old.suggestion_id);
+begin
+  update public.suggestions s
+     set vote_count = (
+       select count(*) from public.suggestion_votes v
+        where v.suggestion_id = objetivo
+     )
+   where s.id = objetivo;
+  return null;
+end $$;
+
+drop trigger if exists habitium_recontar_votos on public.suggestion_votes;
+create trigger habitium_recontar_votos
+  after insert or delete on public.suggestion_votes
+  for each row execute function public.recontar_votos();
+
+-- ── Cinco al día ────────────────────────────────────────────────────────
+--
+-- El `limit 6` de dentro no es un adorno: sin él, esta cuenta recorrería
+-- todas las sugerencias de esa persona cada vez que escribe una. Con el
+-- límite, en cuanto encuentra seis para de contar.
+
+create or replace function public.limite_sugerencias()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  escritas integer;
+begin
+  select count(*) into escritas from (
+    select 1 from public.suggestions
+     where user_id = new.user_id
+       and created_at > now() - interval '1 day'
+     limit 6
+  ) s;
+
+  if escritas >= 5 then
+    raise exception 'Has escrito cinco sugerencias hoy. Mañana más.'
+      using errcode = 'check_violation';
+  end if;
+
+  return new;
+end $$;
+
+drop trigger if exists habitium_limite_sugerencias on public.suggestions;
+create trigger habitium_limite_sugerencias
+  before insert on public.suggestions
+  for each row execute function public.limite_sugerencias();
+
+revoke all on function public.suggestion_guard() from public, anon, authenticated;
+revoke all on function public.recontar_votos() from public, anon, authenticated;
+revoke all on function public.limite_sugerencias() from public, anon, authenticated;
+
+revoke all on public.suggestions from anon;
+revoke all on public.suggestion_votes from anon;

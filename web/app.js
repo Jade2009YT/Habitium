@@ -49,6 +49,7 @@ import * as avisos from "./avisos.js";
 import * as ia from "./ia.js";
 import * as nutri from "./nutricion-ia.js";
 import * as fin from "./finanzas-ia.js";
+import * as buzon from "./sugerencias.js";
 
 const { createClient } = await (async () => {
   try {
@@ -2199,6 +2200,7 @@ async function loadSettings() {
   renderAccentPicker();
   renderAIKey();
   renderSeguridad();
+  loadBuzon();
 
   const { data } = await supabase.auth.getUser();
   $("settings-email").textContent = data?.user?.email ?? "";
@@ -3849,3 +3851,264 @@ if (enModoLocal()) {
   if (session) continuarSesion();
   else showAuth();
 }
+
+// ── Buzón de ideas ──────────────────────────────────────────────────
+//
+// La única parte de Habitium donde lo que escribe una persona lo leen
+// las demás. Eso trae dos cosas que no hacen falta en ningún otro sitio
+// de la app:
+//
+//   1. No pasa por store.js. El almacén local está montado para "lo mío
+//      es mío": guarda en el navegador y sincroniza TUS filas. Aquí hay
+//      que leer las de todos, así que se va directo a Supabase. La
+//      consecuencia es que el buzón necesita internet, y cuando no lo
+//      hay se dice en vez de enseñar una lista vacía que parece un
+//      buzón donde nadie ha escrito nunca.
+//
+//   2. Todo lo que se pinta va escapado. En el resto de la app el texto
+//      es tuyo, y colarte un <script> a ti mismo no es un ataque. Aquí
+//      un título malicioso se ejecutaría en el navegador de todos los
+//      que abran Ajustes.
+
+let generacionBuzon = 0;
+let ordenBuzon = "votadas";
+let buzonCargado = { lista: [], votos: new Set(), yo: null };
+
+async function loadBuzon() {
+  const tarjeta = $("buzon-card");
+  if (!tarjeta) return;
+
+  // Sin cuenta no hay buzón compartido. Se dice y se acaba aquí.
+  if (store.esSoloLocal()) {
+    $("buzon-sin-cuenta").hidden = false;
+    $("buzon-dentro").hidden = true;
+    return;
+  }
+  $("buzon-sin-cuenta").hidden = true;
+  $("buzon-dentro").hidden = false;
+
+  // Contra pintados solapados: si entras y sales de Ajustes rápido, dos
+  // cargas corren a la vez y la lenta pisa a la rápida con datos viejos.
+  const generacion = ++generacionBuzon;
+
+  const selector = $("buzon-kind");
+  if (selector && !selector.options.length) {
+    selector.innerHTML = buzon.TIPOS.map(
+      (t) => `<option value="${t.id}">${t.icono} ${esc(t.etiqueta)}</option>`
+    ).join("");
+  }
+
+  const lista = $("buzon-lista");
+  lista.innerHTML = `<li class="empty"><span class="empty-title">Cargando…</span></li>`;
+
+  const yo = (await supabase.auth.getUser()).data?.user?.id ?? null;
+
+  const [sugerencias, votos] = await Promise.all([
+    supabase.from("suggestions").select("*"),
+    supabase.from("suggestion_votes").select("*"),
+  ]);
+
+  if (generacion !== generacionBuzon) return;
+
+  if (sugerencias.error) {
+    // El caso más probable no es un fallo: es que todavía no has pegado
+    // la parte nueva de schema.sql en Supabase. Decirlo ahorra media
+    // hora de mirar la consola.
+    lista.innerHTML = emptyState(
+      "🔌",
+      "No se pudo abrir el buzón",
+      "Si acabas de actualizar la app, vuelve a pegar supabase/schema.sql en el SQL Editor."
+    );
+    $("buzon-resumen").textContent = "";
+    return;
+  }
+
+  buzonCargado = {
+    lista: sugerencias.data ?? [],
+    votos: buzon.misVotos(votos.data ?? [], yo),
+    yo,
+  };
+
+  pintarBuzon();
+}
+
+function pintarBuzon() {
+  const { lista, votos, yo } = buzonCargado;
+
+  const res = buzon.resumen(lista);
+  $("buzon-resumen").textContent = res.total === 0
+    ? "Todavía no ha escrito nadie. Estrénalo tú."
+    : `${res.total} ${res.total === 1 ? "idea" : "ideas"}` +
+      (res.hechas ? ` · ${res.hechas} ya ${res.hechas === 1 ? "hecha" : "hechas"}` : "") +
+      (res.enCamino ? ` · ${res.enCamino} en marcha` : "");
+
+  const quedan = buzon.quedanHoy(lista.filter((s) => s.user_id === yo));
+  $("buzon-quedan").textContent =
+    quedan === 0 ? "Hoy ya no te quedan más." :
+    quedan === 1 ? "Te queda una hoy." :
+    `Te quedan ${quedan} hoy.`;
+
+  $("buzon-filtros").innerHTML = buzon.ORDENES.map(
+    (o) => `<button type="button" class="buzon-filtro${o.id === ordenBuzon ? " on" : ""}"
+              data-orden="${o.id}" aria-pressed="${o.id === ordenBuzon}">${esc(o.etiqueta)}</button>`
+  ).join("");
+
+  const items = buzon.ordenar(lista, ordenBuzon, yo);
+  const host = $("buzon-lista");
+
+  if (items.length === 0) {
+    host.innerHTML = ordenBuzon === "mias"
+      ? emptyState("✍️", "No has escrito nada todavía", "Lo que pongas arriba aparecerá aquí.")
+      : emptyState("💬", "El buzón está vacío", "Sé el primero en pedir algo.");
+    return;
+  }
+
+  host.innerHTML = items.map((s) => {
+    const tipo = buzon.TIPOS.find((t) => t.id === s.kind) ?? buzon.TIPOS[2];
+    const estado = buzon.estadoDe(s.status);
+    const votada = votos.has(s.id);
+    const mia = s.user_id === yo;
+
+    return `<li class="buzon-item${s.status === "hecha" ? " hecha" : ""}">
+      <button type="button" class="buzon-voto${votada ? " on" : ""}" data-votar="${esc(s.id)}"
+              aria-pressed="${votada}" title="${votada ? "Quitar mi voto" : "Me vendría bien"}">
+        <span class="buzon-flecha" aria-hidden="true">▲</span>
+        <span class="buzon-cuenta">${Number(s.vote_count) || 0}</span>
+      </button>
+      <div class="buzon-cuerpo">
+        <p class="buzon-titulo">
+          <span class="buzon-tipo" aria-hidden="true">${tipo.icono}</span>
+          ${esc(s.title)}
+        </p>
+        ${s.body ? `<p class="buzon-texto">${esc(s.body)}</p>` : ""}
+        <p class="buzon-pie">
+          <span class="buzon-estado ${estado.clase}">${esc(estado.etiqueta)}</span>
+          <span>${esc(s.author_name || "Anónimo")}${mia ? " · tú" : ""}</span>
+          <span>${esc(buzon.haceCuanto(s.created_at))}</span>
+          ${mia ? `<button type="button" class="buzon-borrar" data-borrar="${esc(s.id)}">Borrar</button>` : ""}
+        </p>
+      </div>
+    </li>`;
+  }).join("");
+}
+
+$("buzon-filtros")?.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-orden]");
+  if (!b) return;
+  ordenBuzon = b.dataset.orden;
+  pintarBuzon();
+});
+
+$("buzon-lista")?.addEventListener("click", async (e) => {
+  const votar = e.target.closest("[data-votar]");
+  const borrar = e.target.closest("[data-borrar]");
+
+  if (votar) {
+    const id = votar.dataset.votar;
+    const yaEstaba = buzonCargado.votos.has(id);
+    const fila = buzonCargado.lista.find((s) => s.id === id);
+
+    // Se pinta antes de que conteste el servidor. Un botón de voto que
+    // tarda medio segundo en reaccionar hace que le des dos veces, y la
+    // segunda deshace la primera.
+    if (yaEstaba) {
+      buzonCargado.votos.delete(id);
+      if (fila) fila.vote_count = Math.max(0, (fila.vote_count || 0) - 1);
+    } else {
+      buzonCargado.votos.add(id);
+      if (fila) fila.vote_count = (fila.vote_count || 0) + 1;
+    }
+    pintarBuzon();
+
+    const { error } = yaEstaba
+      ? await supabase.from("suggestion_votes").delete()
+          .eq("suggestion_id", id).eq("user_id", buzonCargado.yo)
+      : await supabase.from("suggestion_votes")
+          .insert({ suggestion_id: id, user_id: buzonCargado.yo });
+
+    // Si el servidor dice que no, se recarga entero en vez de intentar
+    // deshacer a mano: el número de verdad lo lleva un disparador en
+    // Postgres, y adivinarlo desde aquí es cómo se acaba enseñando un
+    // contador que no coincide con nada.
+    if (error) loadBuzon();
+    return;
+  }
+
+  if (borrar) {
+    const id = borrar.dataset.borrar;
+    borrar.disabled = true;
+    borrar.textContent = "Borrando…";
+    const { error } = await supabase.from("suggestions").delete().eq("id", id);
+    if (error) {
+      borrar.disabled = false;
+      borrar.textContent = "Borrar";
+      return;
+    }
+    buzonCargado.lista = buzonCargado.lista.filter((s) => s.id !== id);
+    pintarBuzon();
+  }
+});
+
+$("buzon-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const aviso = $("buzon-error");
+  const boton = e.target.querySelector('button[type="submit"]');
+
+  const revision = buzon.validar({
+    kind: $("buzon-kind").value,
+    title: $("buzon-titulo").value,
+    body: $("buzon-texto").value,
+    author_name: $("buzon-nombre").value,
+  });
+
+  if (!revision.ok) {
+    aviso.textContent = revision.errores.join(" ");
+    aviso.hidden = false;
+    return;
+  }
+
+  const restantes = buzon.quedanHoy(buzonCargado.lista.filter((s) => s.user_id === buzonCargado.yo));
+  if (restantes === 0) {
+    aviso.textContent = "Has escrito cinco hoy. Mañana más — es para que nadie llene el buzón de golpe.";
+    aviso.hidden = false;
+    return;
+  }
+
+  aviso.hidden = true;
+  boton.disabled = true;
+  boton.textContent = "Enviando…";
+
+  const { data, error } = await supabase
+    .from("suggestions")
+    .insert({ ...revision.limpio, user_id: buzonCargado.yo })
+    .select();
+
+  boton.disabled = false;
+  boton.textContent = "Enviar";
+
+  if (error) {
+    aviso.textContent = error.message?.includes("cinco")
+      ? "Has escrito cinco sugerencias hoy. Mañana más."
+      : "No se ha podido enviar. Mira si tienes conexión y vuelve a probar.";
+    aviso.hidden = false;
+    return;
+  }
+
+  // El nombre se recuerda para la próxima: nadie quiere volver a
+  // escribirlo cada vez.
+  try { localStorage.setItem("habitium.buzon.nombre", revision.limpio.author_name); } catch (err) {}
+
+  $("buzon-titulo").value = "";
+  $("buzon-texto").value = "";
+
+  if (data?.[0]) buzonCargado.lista.push(data[0]);
+  ordenBuzon = "mias";
+  pintarBuzon();
+  showSaved($("buzon-form"));
+});
+
+// El apodo de la última vez.
+try {
+  const guardado = localStorage.getItem("habitium.buzon.nombre");
+  if (guardado && $("buzon-nombre")) $("buzon-nombre").value = guardado;
+} catch (e) {}

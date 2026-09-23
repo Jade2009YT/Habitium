@@ -858,6 +858,57 @@
         <button class="btn btn-primary" type="submit">Guardar presupuesto</button>
       </form>
 
+      <!-- ── Buzón de ideas ─────────────────────────────────────────
+           Lo único de toda la app que es de todos y no de cada uno: lo
+           que escribes aquí lo lee cualquiera que use Habitium. Por eso
+           el texto ajeno va SIEMPRE escapado al pintarlo, y por eso el
+           nombre es un apodo escrito a mano y no el correo. -->
+      <article class="card form-card" id="buzon-card">
+        <header class="card-head"><span class="badge pink" aria-hidden="true">💬</span><h2>Buzón de ideas</h2></header>
+        <p class="muted sm">¿Qué le falta a Habitium? ¿Qué te molesta? Escríbelo aquí.
+           Lo lee todo el que usa la app, y se puede votar lo que proponen los demás.</p>
+
+        <!-- Sin cuenta no hay buzón: es una lista compartida, y para
+             compartir hace falta saber quién es quién. -->
+        <p class="muted sm" id="buzon-sin-cuenta" hidden>
+          El buzón es compartido, así que necesita cuenta. Estás usando Habitium
+          sin ella: todo lo tuyo se queda en este dispositivo, y eso incluye no
+          poder escribir aquí.
+        </p>
+
+        <div id="buzon-dentro" hidden>
+          <p class="buzon-resumen" id="buzon-resumen"></p>
+
+          <form id="buzon-form">
+            <div class="form-grid">
+              <label class="field"><span>Qué es</span>
+                <select id="buzon-kind"></select>
+              </label>
+              <label class="field"><span>Tu nombre, si quieres</span>
+                <input id="buzon-nombre" type="text" maxlength="24" autocomplete="nickname"
+                       spellcheck="false" placeholder="Anónimo">
+              </label>
+            </div>
+            <label class="field"><span>En una línea</span>
+              <input id="buzon-titulo" type="text" maxlength="80" required
+                     placeholder="Que el fondo se ponga oscuro solo de noche">
+            </label>
+            <label class="field"><span>Explícalo un poco, si hace falta</span>
+              <textarea id="buzon-texto" maxlength="500" rows="3"
+                        placeholder="A partir de las diez de la noche me deslumbra."></textarea>
+            </label>
+            <div class="composer-row">
+              <button class="btn btn-primary" type="submit">Enviar</button>
+              <span class="muted sm" id="buzon-quedan"></span>
+            </div>
+            <p class="warn sm" id="buzon-error" role="alert" hidden></p>
+          </form>
+
+          <div class="buzon-filtros" id="buzon-filtros" role="group" aria-label="Cómo ordenar"></div>
+          <ul class="buzon-lista" id="buzon-lista"></ul>
+        </div>
+      </article>
+
       <div class="card form-card">
         <header class="card-head"><span class="badge blue" aria-hidden="true">👤</span><h2>Cuenta</h2></header>
         <p class="muted" id="settings-email"></p>

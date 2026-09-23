@@ -288,7 +288,14 @@ code {
   margin-bottom: 5px;
 }
 
-input, select {
+/* textarea va aquí dentro y no aparte. Estuvo fuera mucho tiempo, y el
+   resultado era que los dos cuadros de texto de los cuestionarios —el de
+   Nutrición y el de Finanzas— se pintaban con el aspecto que trae el
+   navegador de serie: fondo claro en una app oscura, borde de otro
+   grosor y la letra de sistema en vez de la de la app. Se veía raro y
+   nadie sabía por qué, porque la regla que los tenía que vestir estaba
+   escrita y parecía cubrirlos. */
+input, select, textarea {
   width: 100%;
   font: inherit;
   font-size: 16px; /* 16px evita el zoom automático de iOS al enfocar */
@@ -299,8 +306,8 @@ input, select {
   border-radius: var(--r-sm);
   transition: border-color 0.15s, box-shadow 0.15s;
 }
-input::placeholder { color: var(--text-3); }
-input:focus, select:focus {
+input::placeholder, textarea::placeholder { color: var(--text-3); }
+input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--green);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 18%, transparent);
@@ -2595,3 +2602,174 @@ input[type="color"] { min-height: 0; padding: 0; }
   background: var(--border);
 }
 #auth-local .auth-fine { text-align: center; margin: 0; }
+
+/* ── Buzón de ideas ──────────────────────────────────────────────────
+   Una lista de cosas escritas por otra gente, con un voto a la
+   izquierda. El voto va en columna y pegado al borde porque es lo único
+   que se pulsa mucho: en el móvil tiene que caer bajo el pulgar sin
+   apuntar.
+
+   Ojo con el ancho: el título de una sugerencia lo escribe cualquiera y
+   puede ser una palabra de sesenta letras sin espacios. Por eso
+   .buzon-cuerpo lleva min-width: 0 —un hijo de flex no baja de su
+   contenido sin eso— y los textos, overflow-wrap. Sin las dos cosas, una
+   sola sugerencia ensancha la tarjeta entera y la app se mueve de lado
+   en el móvil. Es el mismo fallo que ya salió dos veces en las rejillas. */
+
+.buzon-resumen {
+  font-size: 13.5px;
+  color: var(--text-2);
+  margin: 0 0 14px;
+}
+
+.buzon-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 22px 0 12px;
+}
+
+.buzon-filtro {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  font: 500 13px/1 inherit;
+  padding: 8px 13px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.buzon-filtro:hover { color: var(--text); border-color: var(--text-3); }
+
+.buzon-filtro.on {
+  background: var(--accent, var(--green));
+  border-color: transparent;
+  color: #fff;
+}
+
+.buzon-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.buzon-item {
+  display: flex;
+  gap: 13px;
+  align-items: flex-start;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 13px 14px;
+}
+
+/* Una sugerencia ya hecha se apaga un poco, pero sigue ahí: ver que algo
+   que pidió alguien acabó hecho es lo que hace que se vuelva a escribir. */
+.buzon-item.hecha .buzon-titulo { color: var(--text-2); }
+
+.buzon-voto {
+  appearance: none;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 46px;
+  padding: 7px 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  font: inherit;
+}
+
+.buzon-voto:hover { border-color: var(--accent, var(--green)); color: var(--text); }
+
+.buzon-voto.on {
+  background: color-mix(in srgb, var(--accent, var(--green)) 14%, transparent);
+  border-color: var(--accent, var(--green));
+  color: var(--accent, var(--green));
+}
+
+.buzon-flecha { font-size: 11px; line-height: 1; }
+
+.buzon-cuenta {
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+/* El min-width: 0 no es opcional. Ver el comentario de arriba. */
+.buzon-cuerpo {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.buzon-titulo {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.buzon-tipo { margin-right: 4px; }
+
+.buzon-texto {
+  margin: 5px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.buzon-pie {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 9px 0 0;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+.buzon-estado {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  padding: 3px 7px;
+  border-radius: 5px;
+}
+
+.est-nueva   { background: var(--surface); color: var(--text-3); border: 1px solid var(--border); }
+.est-mirando { background: var(--blue-soft); color: var(--blue); }
+.est-camino  { background: var(--purple-soft); color: var(--purple); }
+.est-hecha   { background: var(--green-soft); color: var(--green); }
+.est-no      { background: var(--red-soft); color: var(--red); }
+
+.buzon-borrar {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--red);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.buzon-borrar[disabled] { color: var(--text-3); cursor: default; }
+
+#buzon-form textarea {
+  resize: vertical;
+  min-height: 68px;
+}
