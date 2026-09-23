@@ -45,7 +45,7 @@ const SHELL = [
   // Si existe la copia local de supabase-js, se cachea. Si no, el
   // cache.add falla en silencio y se usa el CDN de abajo.
   "./vendor/supabase.js",
-  "./manifest.webmanifest",
+  "./manifest.json",
   "./icon.png",
 ];
 

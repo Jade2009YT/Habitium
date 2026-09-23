@@ -569,7 +569,16 @@ base de datos local. Subes `web/` a cualquier sitio con HTTPS, la añades
 a la pantalla de inicio del iPhone y **se comporta como una app** —
 icono propio, sin barra de Safari, pantalla completa y sin cobertura.
 
-Los pasos están en **[`docs/subir-a-internet.md`](docs/subir-a-internet.md)**.
+Dos guías, según dónde la pongas:
+
+- **[`docs/synology-y-supabase.md`](docs/synology-y-supabase.md)** — la web
+  en tu NAS y los datos en Supabase. Incluye los cuatro ajustes de
+  Supabase que hay que tocar para que el login funcione fuera de tu
+  ordenador; el que más se olvida es el de las **URL de redirección**,
+  y sin él los correos de confirmación llevan a `localhost`.
+- **[`docs/subir-a-internet.md`](docs/subir-a-internet.md)** — las
+  opciones de hosting gratuito (Cloudflare Pages, Netlify) y la
+  comparación honesta con la app nativa.
 Lo que hay que saber antes de decidir:
 
 - **Ya no caduca a los 7 días**, no hace falta Mac ni Xcode, funciona en
@@ -584,6 +593,13 @@ se probó en Chrome y se retiró. En la PWA los avisos saltan mientras la
 app esté abierta (aunque sea de fondo) y al volver te recuerdan una vez
 el que se acaba de pasar. Se arregla del todo con Web Push y un servidor
 que empuje — con Supabase Edge Functions entra en el plan gratuito.
+
+El manifest se llama **`manifest.json`** y no `manifest.webmanifest`,
+que sería lo oficial: casi ningún servidor conoce esa extensión y la
+sirve como texto plano — y cuando eso pasa, el iPhone ignora el manifest
+entero y la app instalada se queda sin nombre, sin icono y abriéndose
+dentro de Safari, sin dar ningún error. Es el fallo más típico al montar
+una PWA en un servidor propio, y con `.json` no puede ocurrir.
 
 ### Tres cosas que salieron de probar la app instalada, en modo avión
 

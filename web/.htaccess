@@ -11,12 +11,16 @@
 
 # ── Tipos MIME ─────────────────────────────────────────────────────
 #
-# Esto NO es opcional. Apache no conoce .webmanifest y lo sirve como
-# texto plano; entonces el iPhone ignora el manifest entero y la app
-# instalada se queda sin nombre, sin icono y abriéndose dentro de
-# Safari. Es el fallo más típico al montar una PWA en un servidor
-# propio, y no da ningún error: simplemente no funciona.
+# El manifest se llama manifest.JSON a propósito. La extensión oficial es
+# .webmanifest, pero casi ningún servidor la conoce y la sirve como texto
+# plano — y cuando eso pasa, el iPhone ignora el manifest entero: la app
+# instalada se queda sin nombre, sin icono y abriéndose dentro de Safari,
+# sin dar ningún error. Es el fallo más típico al montar una PWA en un
+# servidor propio. Con .json lo sirve bien cualquiera.
+#
+# La línea de .webmanifest queda por si algún día se vuelve a ella.
 AddType application/manifest+json .webmanifest
+AddType application/json .json
 AddType text/javascript .js
 AddType image/png .png
 
@@ -51,7 +55,7 @@ AddType image/png .png
 
   # El resto sí se cachea: el service worker ya se encarga de refrescar
   # lo que haga falta.
-  <FilesMatch "\.(css|png|webmanifest)$">
+  <FilesMatch "\.(css|png)$">
     Header set Cache-Control "public, max-age=604800"
   </FilesMatch>
 </IfModule>
