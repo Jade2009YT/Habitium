@@ -2577,3 +2577,21 @@ input[type="color"] { min-height: 0; padding: 0; }
 .boot p { margin: 0; }
 .boot-hint { font-size: 13px; color: var(--text-3); max-width: 34ch; line-height: 1.5; }
 .boot .btn { margin-top: 6px; }
+
+/* ═══ MODO SIN CUENTA ════════════════════════════════════════════════ */
+
+.auth-local { display: grid; gap: 10px; margin-top: 4px; }
+.auth-or {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+.auth-or::before, .auth-or::after {
+  content: "";
+  height: 1px;
+  background: var(--border);
+}
+#auth-local .auth-fine { text-align: center; margin: 0; }

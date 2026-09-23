@@ -223,6 +223,10 @@ export async function getSingleton(table) {
 // ── Cola de salida ──────────────────────────────────────────────────
 
 async function enqueue(entry) {
+  // Sin cuenta no hay nada que encolar: la cola nunca se vaciaría y
+  // crecería para siempre ocupando espacio en el móvil.
+  if (soloLocal) return;
+
   await idbPut(OUTBOX, { ...entry, at: nowISO() });
   syncState.pending = (await idbAll(OUTBOX)).length;
   // Intento inmediato: si hay red, el cambio sube en el acto y el
@@ -242,11 +246,32 @@ async function pendingIDs() {
 let supabase = null;
 let getUserID = async () => null;
 
+/** Modo sin cuenta: todo se guarda en este dispositivo y no sale de
+ *  aquí. Ver la explicación larga en app.js (usarSinCuenta). */
+let soloLocal = false;
+
 /** app.js llama a esto una vez, tras iniciar sesión. */
 export function configure(client, userIDGetter) {
   supabase = client;
   getUserID = userIDGetter;
+  soloLocal = false;
 }
+
+/** Y a esto cuando se entra sin cuenta. */
+export function configureLocal() {
+  supabase = null;
+  getUserID = async () => null;
+  soloLocal = true;
+  // La cola de subida se vacía: sin servidor al que subir, guardarla
+  // solo sirve para que crezca sin fin. Y si mañana se crea una cuenta,
+  // lo que sube es TODO lo local (ver migrarANube), no esta cola.
+  idbClear(OUTBOX).then(() => {
+    syncState.pending = 0;
+    emit();
+  });
+}
+
+export const esSoloLocal = () => soloLocal;
 
 /** Borra todo lo local — al cerrar sesión, para no dejar los datos de
  *  una cuenta visibles a la siguiente que entre en este navegador. */
@@ -255,6 +280,44 @@ export async function wipe() {
   syncState.pending = 0;
   syncState.lastSync = null;
   emit();
+}
+
+/**
+ * De "sin cuenta" a "con cuenta", sin perder nada.
+ *
+ * Es lo que convierte el modo local en una decisión reversible en vez de
+ * un callejón sin salida. Sin esto, alguien que usa Habitium tres meses
+ * en su móvil y luego quiere sincronizar con el portátil tendría que
+ * empezar de cero — y no lo haría: se quedaría en local para siempre.
+ *
+ * Funciona encolando TODAS las filas locales como si se acabaran de
+ * crear. El sync normal se encarga del resto, incluido el orden y los
+ * reintentos si se va la red a mitad.
+ *
+ * Se llama DESPUÉS de configure(), ya con sesión.
+ */
+export async function migrarANube() {
+  if (!supabase) throw new Error("No hay sesión: no se puede migrar.");
+
+  let filas = 0;
+  for (const tabla of TABLES) {
+    for (const fila of await idbAll(tabla)) {
+      await idbPut(OUTBOX, { op: "upsert", table: tabla, row: fila, at: nowISO() });
+      filas++;
+    }
+  }
+  for (const tabla of SINGLETONS) {
+    const fila = (await idbAll(tabla))[0];
+    if (fila) {
+      await idbPut(OUTBOX, { op: "singleton", table: tabla, row: fila, at: nowISO() });
+      filas++;
+    }
+  }
+
+  syncState.pending = (await idbAll(OUTBOX)).length;
+  emit();
+  await sync();
+  return filas;
 }
 
 let syncing = false;

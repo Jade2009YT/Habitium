@@ -131,6 +131,21 @@
 
     <button id="forgot-password" class="btn-link" type="button">¿Has olvidado tu contraseña?</button>
     <p id="auth-message" class="auth-message" role="status"></p>
+
+    <!-- Sin cuenta. Va el último y con menos peso visual que el
+         formulario: tener cuenta es mejor (sincroniza entre tus
+         dispositivos), pero obligar a registrarse a alguien que solo
+         quiere probar la app en su móvil es perder a esa persona. -->
+    <div class="auth-local" id="auth-local">
+      <div class="auth-or"><span>o</span></div>
+      <button id="use-local" class="btn btn-ghost btn-block" type="button">
+        Usar sin cuenta
+      </button>
+      <p class="auth-fine">
+        Todo se guarda solo en este dispositivo y no sale de aquí. Podrás crear
+        una cuenta más adelante sin perder nada.
+      </p>
+    </div>
   </div>
 
   <aside class="auth-aside" aria-hidden="true">
@@ -728,6 +743,21 @@
         </div>
         <p class="muted sm" id="ai-status"></p>
       </div>
+
+      <!-- Solo en modo sin cuenta: el aviso de dónde están tus datos y
+           la salida hacia una cuenta de verdad. -->
+      <article class="card" id="local-card" hidden>
+        <header class="card-head"><span class="badge orange" aria-hidden="true">📱</span><h2>Sin cuenta</h2></header>
+        <p class="muted">Todo lo que apuntas se guarda <b>solo en este dispositivo</b>.
+           No sube a ningún servidor y nadie más puede verlo.</p>
+        <p class="warn sm">Si borras los datos del navegador o desinstalas la app,
+           se va todo. Y no puedes verlo desde otro móvil ni desde el ordenador.</p>
+        <div class="composer-row">
+          <button class="btn btn-primary" id="local-to-account" type="button">Crear cuenta y sincronizar</button>
+          <button class="btn btn-ghost" id="local-export" type="button">Descargar mis datos</button>
+        </div>
+        <p class="muted sm" id="local-status" role="status"></p>
+      </article>
 
       <div class="card form-card">
         <header class="card-head"><span class="badge" aria-hidden="true">🔐</span><h2>Seguridad de tu cuenta</h2></header>

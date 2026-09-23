@@ -424,8 +424,18 @@ $("mfa-cancel").addEventListener("click", async () => {
 });
 
 async function doSignOut() {
-  // Se borra lo local: en un dispositivo compartido (el iPad del cole)
-  // los datos de una cuenta no deben quedar accesibles a la siguiente.
+  // Sin cuenta, "Salir" solo vuelve a la pantalla de entrada. Los datos
+  // se quedan donde están: son de este dispositivo, no de una sesión, y
+  // borrarlos aquí sería tirar el trabajo de alguien que solo quería
+  // ver qué hay detrás del botón.
+  if (store.esSoloLocal()) {
+    salirDeModoLocal();
+    return;
+  }
+
+  // Con cuenta sí se borra lo local: en un dispositivo compartido (el
+  // iPad del cole) los datos de una cuenta no deben quedar accesibles a
+  // la siguiente.
   await store.wipe();
 
   // Y la clave de IA. Si se quedara, la siguiente persona que entrara
@@ -440,6 +450,136 @@ async function doSignOut() {
 }
 $("sign-out").addEventListener("click", doSignOut);
 $("sign-out-2").addEventListener("click", doSignOut);
+
+// ── Modo sin cuenta ─────────────────────────────────────────────────
+//
+// Habitium entera, funcionando contra el navegador y nada más: sin
+// registro, sin servidor, sin que nadie te invite. Es lo que hace que
+// puedas pasarle la app a un amigo con un enlace y que la use en su
+// Android el mismo día.
+//
+// Por dentro no cambia casi nada, y eso es lo bueno: la app SIEMPRE ha
+// guardado todo en IndexedDB y Supabase solo servía para copiarlo entre
+// tus dispositivos. Quitar Supabase de la ecuación es no llamar a
+// store.configure().
+//
+// Lo que sí hay que cuidar es que no sea un callejón sin salida: quien
+// use esto tres meses y luego quiera el portátil tiene que poder crear
+// una cuenta SIN perder nada (ver migrarANube en store.js). Sin esa
+// salida, el modo local sería una trampa amable.
+
+/** Un aviso en la franja de arriba. Se va solo a los seis segundos: es
+ *  para decir algo, no para quedarse. */
+function banner(texto, clase = "is-info", segundos = 6) {
+  const b = $("sync-banner");
+  if (!b) return;
+  b.className = `banner ${clase}`.trim();
+  b.textContent = texto;
+  b.hidden = false;
+  clearTimeout(banner._reloj);
+  banner._reloj = setTimeout(() => { b.hidden = true; }, segundos * 1000);
+}
+
+const CLAVE_LOCAL = "habitium.sincuenta";
+
+function enModoLocal() {
+  try {
+    return localStorage.getItem(CLAVE_LOCAL) === "1";
+  } catch (e) {
+    return false;
+  }
+}
+
+function marcarModoLocal(activo) {
+  try {
+    if (activo) localStorage.setItem(CLAVE_LOCAL, "1");
+    else localStorage.removeItem(CLAVE_LOCAL);
+  } catch (e) {}
+}
+
+/** Entrar sin cuenta. */
+async function usarSinCuenta() {
+  marcarModoLocal(true);
+  store.configureLocal();
+  await showApp({ local: true });
+}
+
+$("use-local")?.addEventListener("click", usarSinCuenta);
+
+/** Salir del modo local. No borra nada: los datos siguen en el
+ *  dispositivo, y si vuelves a entrar sin cuenta están donde estaban. */
+function salirDeModoLocal() {
+  marcarModoLocal(false);
+  showAuth();
+}
+
+// ── De sin cuenta a con cuenta ──────────────────────────────────────
+
+$("local-to-account")?.addEventListener("click", () => {
+  // Se marca que hay datos locales esperando. En cuanto haya sesión,
+  // continuarSesion() los sube. Se hace así y no aquí mismo porque
+  // crear la cuenta pasa por el correo de confirmación: entre pulsar el
+  // botón y tener sesión pueden pasar minutos y un cambio de pestaña.
+  try { sessionStorage.setItem("habitium.migrar", "1"); } catch (e) {}
+  marcarModoLocal(false);
+  showAuth();
+  setAuthMode("signup");
+  setAuthMessage("Crea tu cuenta y subiremos lo que ya tienes apuntado.", true);
+});
+
+/** Sube lo local a la cuenta recién creada. */
+async function migrarSiTocaba() {
+  let tocaba = false;
+  try {
+    tocaba = sessionStorage.getItem("habitium.migrar") === "1";
+    sessionStorage.removeItem("habitium.migrar");
+  } catch (e) {}
+  if (!tocaba) return;
+
+  try {
+    const filas = await store.migrarANube();
+    if (filas > 0) {
+      banner(`Listo: ${filas} cosas tuyas están ya en tu cuenta.`, "is-ok");
+    }
+  } catch (error) {
+    console.warn("migrar:", error);
+    banner("No se han podido subir tus datos. Siguen aquí: pulsa el botón de sincronizar.", "");
+  }
+}
+
+// ── Descargar los datos ─────────────────────────────────────────────
+//
+// En modo local no hay copia de seguridad en ningún sitio: si el móvil
+// se pierde o alguien borra los datos del navegador, se va todo. Poder
+// bajarse un archivo es el mínimo honesto cuando la app te dice "esto
+// solo está aquí".
+
+$("local-export")?.addEventListener("click", async () => {
+  const estado = $("local-status");
+  estado.textContent = "Preparando…";
+  try {
+    const datos = {};
+    for (const tabla of [...store.TABLES, ...store.SINGLETONS]) {
+      datos[tabla] = await store.all(tabla);
+    }
+
+    const blob = new Blob([JSON.stringify({ version: 1, fecha: nowISO(), datos }, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `habitium-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    // Sin esto el blob se queda en memoria hasta recargar la página.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+    const total = Object.values(datos).reduce((s, v) => s + v.length, 0);
+    estado.textContent = `Descargado: ${total} cosas.`;
+  } catch (error) {
+    estado.textContent = "No se ha podido descargar.";
+  }
+});
 
 // ── Navegación ──────────────────────────────────────────────────────
 
@@ -3549,10 +3689,26 @@ function showAuth() {
   $("auth-screen").hidden = false;
 }
 
-async function showApp() {
+async function showApp({ local = false } = {}) {
   $("boot").hidden = true;
   $("auth-screen").hidden = true;
   $("app").hidden = false;
+
+  // Lo que no tiene sentido sin cuenta: sincronizar, el correo de la
+  // barra lateral, la verificación en dos pasos y el control de
+  // registro. Dejarlo a la vista sería ofrecer botones que no hacen
+  // nada.
+  for (const id of ["refresh", "local-card"]) {
+    const el = $(id);
+    if (el) el.hidden = id === "local-card" ? !local : local;
+  }
+  document.querySelectorAll("#view-settings .form-card").forEach((card) => {
+    const esSeguridad = card.querySelector("#sec-state, #password-form");
+    if (esSeguridad) card.hidden = local;
+  });
+  $("sign-out").textContent = local ? "Salir" : "Cerrar sesión";
+  const salir2 = $("sign-out-2");
+  if (salir2) salir2.textContent = local ? "Salir" : "Cerrar sesión";
 
   const fecha = new Date().toLocaleDateString("es-ES", {
     weekday: "long",
@@ -3561,11 +3717,14 @@ async function showApp() {
   });
   $("topbar-date").textContent = fecha.charAt(0).toUpperCase() + fecha.slice(1);
 
-  const { data } = await supabase.auth.getUser();
-  const email = data?.user?.email ?? "";
+  let email = "";
+  if (!local) {
+    const { data } = await supabase.auth.getUser();
+    email = data?.user?.email ?? "";
+  }
   await setDisplayName(email);
-  $("side-email").textContent = email;
-  $("side-avatar").textContent = email.charAt(0) || "·";
+  $("side-email").textContent = local ? "Sin cuenta · solo este dispositivo" : email;
+  $("side-avatar").textContent = local ? "·" : (email.charAt(0) || "·");
 
   // Normalmente Inicio; salvo que se venga de pulsar un aviso de rutina.
   let inicial = "home";
@@ -3582,7 +3741,7 @@ async function showApp() {
   // ahora mismo. Ese perfil es "más reciente" que el del móvil, gana la
   // fusión, y la racha de verdad —siete días -- se pierde en los dos
   // sitios. La pantalla ya está pintada, así que esperar aquí no se nota.
-  await store.sync();
+  if (!local) await store.sync();
 
   // El nombre se vuelve a mirar AQUÍ: antes de sincronizar no existe
   // user_settings todavía, así que la primera vez salía el trozo del
@@ -3595,6 +3754,9 @@ async function showApp() {
   } catch (error) {
     console.warn("racha:", error);
   }
+
+  // Si se venía de "crear cuenta y sincronizar", subir lo que había.
+  if (!local) await migrarSiTocaba();
 
   // Los avisos van DESPUÉS del sync: programarlos antes usaría los datos
   // viejos del dispositivo y podría avisar de un paso que ya marcaste
@@ -3651,6 +3813,11 @@ async function continuarSesion() {
 }
 
 supabase.auth.onAuthStateChange((_event, session) => {
+  // En modo local, Supabase no manda: un "SIGNED_OUT" suyo (que llega
+  // solo por existir el cliente) echaría a la calle a quien entró sin
+  // cuenta.
+  if (store.esSoloLocal()) return;
+
   if (session) continuarSesion();
   else {
     ocultarSegundoPaso();
@@ -3668,10 +3835,17 @@ if (dispositivoAjeno) {
   });
 }
 
-// Sesión inicial: onAuthStateChange también dispara al arrancar, pero
-// comprobarlo aquí evita el parpadeo de la pantalla de carga.
-const {
-  data: { session },
-} = await supabase.auth.getSession();
-if (session) continuarSesion();
-else showAuth();
+// El modo sin cuenta manda: quien lo eligió no debería ver la pantalla
+// de login nunca más, ni esperar a que Supabase conteste para entrar.
+if (enModoLocal()) {
+  store.configureLocal();
+  showApp({ local: true });
+} else {
+  // Sesión inicial: onAuthStateChange también dispara al arrancar, pero
+  // comprobarlo aquí evita el parpadeo de la pantalla de carga.
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (session) continuarSesion();
+  else showAuth();
+}
