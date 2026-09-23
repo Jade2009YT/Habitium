@@ -562,6 +562,47 @@ archivos de la app, así que arranca al instante y sigue funcionando sin
 conexión o con el NAS apagado. Ver `web/README.md` para ponerla en marcha
 y para publicarla en un Synology con Web Station.
 
+## Sin cuenta: Habitium contra el navegador y nada más
+
+En la pantalla de entrada hay un **"Usar sin cuenta"**. Todo se guarda en
+el dispositivo y no sale de ahí: sin registro, sin servidor, sin que
+nadie te invite. Le pasas el enlace a un amigo y lo usa en su Android el
+mismo día.
+
+Por dentro casi no cambia nada, y eso es lo bueno: la app **siempre** ha
+guardado todo en IndexedDB, y Supabase solo servía para copiarlo entre
+tus dispositivos. Quitarlo de la ecuación es no llamar a
+`store.configure()`.
+
+Lo que sí hubo que cuidar:
+
+- **La cola de subida no se llena.** `enqueue()` sale temprano en modo
+  local: sin servidor al que subir, guardar una cola que nunca se vacía
+  solo ocupa sitio en el móvil para siempre.
+- **"Salir" no borra nada.** Con cuenta sí se borra lo local al cerrar
+  sesión (el iPad del instituto). Sin cuenta, los datos son del
+  dispositivo y no de una sesión: borrarlos sería tirar el trabajo de
+  alguien que solo quería ver qué hay detrás del botón.
+- **Supabase no manda.** Un `SIGNED_OUT` suyo —que llega solo por
+  existir el cliente— echaría a la calle a quien entró sin cuenta.
+- **Se puede salir del modo local sin perder nada.** `migrarANube()`
+  encola todas las filas locales como si se acabaran de crear, y el sync
+  normal hace el resto. Sin esa salida, el modo local sería una trampa
+  amable: quien lo usa tres meses y luego quiere el portátil tendría que
+  empezar de cero — y no lo haría.
+- **Y se pueden descargar los datos.** Cuando la app te dice "esto solo
+  está aquí", poder bajarte un archivo es el mínimo honesto.
+
+Ajustes enseña la tarjeta de "Sin cuenta" con las dos cosas: dónde están
+tus datos y **qué pasa si borras los del navegador**.
+
+### Un fallo de la prueba que merece recordarse
+
+`emptyState()` pinta un `<li class="empty">`, así que **una lista vacía
+tiene un `li`**. Contar `#task-list li` a secas confunde "vacía" con "un
+elemento", y la prueba decía que guardar no funcionaba cuando funcionaba
+perfectamente. Los arneses cuentan ahora `li:not(.empty)`.
+
 ## Subirla a internet y ponerla en la pantalla de inicio
 
 Se puede, y está construida para eso: manifest, service worker, iconos y
